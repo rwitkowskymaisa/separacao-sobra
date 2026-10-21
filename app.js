@@ -61,7 +61,10 @@ function agendarRefresh(ms){clearTimeout(refreshT);refreshT=setTimeout(async fun
 var cur=null,sel=null,armed=null,armT=null,nome=lsGet('nome','');
 function setSync(c,t){var el=$('sync');el.className='sync '+c;el.textContent=t}
 var actx=null;
-function beep(f,d,n){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();for(var i=0;i<(n||1);i++){var o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.connect(g);g.connect(actx.destination);var t=actx.currentTime+i*(d+.06);g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.start(t);o.stop(t+d)}}catch(e){}}
+function audioAtivar(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();
+  var o=actx.createOscillator(),g=actx.createGain();g.gain.value=0.0001;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+0.02)}catch(e){}}
+['pointerdown','touchstart','keydown'].forEach(function(ev){document.addEventListener(ev,function una(){audioAtivar();document.removeEventListener(ev,una,true)},true)});
+function beep(f,d,n){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();for(var i=0;i<(n||1);i++){var o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.connect(g);g.connect(actx.destination);var t=actx.currentTime+i*(d+.06);g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.start(t);o.stop(t+d)}}catch(e){}}
 var TONE={C:[880,.12,1],K:[660,.12,2],E:[1180,.12,1],D:[330,.2,1],X:[330,.2,2],ERR:[200,.45,2],BOX:[990,.1,3]};
 function tone(k){beep.apply(null,TONE[k])}
 function flash(cls,dest,t,c,extra){var html='<div class="dest">'+esc(dest)+'</div>'+(t?'<div class="t">'+esc(t)+'</div>':'')+(c?'<div class="c">'+c+'</div>':'')+(extra||'');
@@ -201,6 +204,7 @@ function carregarLib(){return new Promise(function(ok,erro){if(window.Html5Qrcod
 function camEstado(txt,pronto){var e=$('camEstado');e.textContent=txt;e.className='cam-estado'+(pronto?' pronto':'')}
 function camCtx(){$('camCtx').textContent=cur?('Caixa ativa '+cur+' · '+(BOX[cur]?BOX[cur].sit:'')):'Livros soltos (sem caixa ativa)'}
 async function abrirCamera(){
+  audioAtivar();
   if(camAberta)return;
   camAberta=true;$('cam').classList.remove('hidden');document.body.style.overflow='hidden';
   $('camRes').className='cam-res';$('camRes').innerHTML='<div class="dest">Aponte para o código de barras</div>';camCtx();camEstado('Iniciando câmera…');
@@ -210,7 +214,7 @@ async function abrirCamera(){
     await leitor.start({facingMode:'environment'},{fps:12,qrbox:function(w,h){var lw=Math.floor(Math.min(w*0.85,420));return {width:lw,height:Math.floor(lw*0.45)}}},lidoCamera,function(){});
     camPronto=true;camEstado('Pronto: aponte para o código de barras',true);
     clearInterval(camTimer);
-    camTimer=setInterval(function(){if(!camPronto&&Date.now()-camVisto>600&&Date.now()-camLido>900){camPronto=true;camEstado('Pronto para o próximo livro',true)}},150);
+    camTimer=setInterval(function(){if(!camPronto&&Date.now()-camVisto>800&&Date.now()-camLido>1500){camPronto=true;camEstado('Pronto para o próximo livro',true)}},150);
   }catch(e){
     var m=String(e&&e.message||e);
     camEstado(/Permission|NotAllowed|denied/i.test(m)?'Sem permissão para usar a câmera. Libere a câmera nas configurações do navegador.':'Não foi possível abrir a câmera: '+m);
@@ -223,7 +227,8 @@ function lidoCamera(texto){
   if(d.length!==13||!/^97[89]/.test(d)){camEstado('Este código não é um ISBN de livro');return}
   camPronto=false;camLido=Date.now();
   camEstado('Lido '+d+' · afaste o livro para ler o próximo');
-  try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}
+  beep(1600,.09,1);
+  try{navigator.vibrate&&navigator.vibrate(120)}catch(e){}
   lerTitulo(d);
   setTimeout(camCtx,400);
 }
