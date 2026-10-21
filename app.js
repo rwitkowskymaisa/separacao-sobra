@@ -10,9 +10,9 @@ function lsGet(k,d){try{var v=localStorage.getItem(LSK+'-'+k);return v==null?d:v
 function lsSet(k,v){try{localStorage.setItem(LSK+'-'+k,v)}catch(e){}}
 
 /* ---------- plano (vem do Supabase) ---------- */
-var BOX={},BOXES=[],NOTAS={},BYISBN={},PED={},TIT={},SOBRA={},ALIAS={},TOT={C:0,E:0,D:0},NEED={CBP:0,CBTBE:0};
+var BOX={},BOXES=[],NOTAS={},BYISBN={},PED={},TIT={},SOBRA={},ALIAS={},TOT={C:0,E:0,D:0},NEED={CBP:0,CBTBE:0,DEV:0};
 var BK=['C','K','E','D'],EVS=['CBP','CBTBE'];
-var DEST={C:'CBP',K:'CBP',E:'CBTBE',D:'DEVOLUÇÃO',X:'DEVOLUÇÃO'},DCLS={C:'cbp',K:'cbp',E:'cbtbe',D:'dev',X:'dev'};
+var DEST={C:'CBP',K:'CBP',E:'CBTBE',D:'DEVOLUÇÃO POA',X:'DEVOLUÇÃO POA'},DCLS={C:'cbp',K:'cbp',E:'cbtbe',D:'dev',X:'dev'};
 function plan(r){return {C:r[4]-r[7],K:r[7],E:r[5],D:r[6]}}
 function isbn10to13(d){var b='978'+d.slice(0,9),s=0;for(var i=0;i<12;i++)s+=(+b[i])*(i%2?3:1);return b+((10-s%10)%10)}
 function need(i,ev){return Math.max(0,((PED[i]||{})[ev]||0)-((SOBRA[i]||{})[ev]||0))}
@@ -25,14 +25,14 @@ async function carregarPlanoDoBanco(){
   var cx=d.caixas.map(function(c){return {id:c[0],situacao:c[1],convertida:c[2],notas:c[3]}});
   var it=d.itens.map(function(x){return {caixa:x[0],isbn:x[1],descricao:x[2],nota:x[3],estoque:x[4],cbp:x[5],comp:x[6],cbtbe:x[7],dev:x[8]}});
   var pd=d.pedidos.map(function(p){return {isbn:p[0],evento:p[1],titulo:p[2],qtd:p[3]}});
-  BOX={};BOXES=[];NOTAS={};BYISBN={};PED={};TIT={};SOBRA={};ALIAS={};TOT={C:0,E:0,D:0};NEED={CBP:0,CBTBE:0};
+  BOX={};BOXES=[];NOTAS={};BYISBN={};PED={};TIT={};SOBRA={};ALIAS={};TOT={C:0,E:0,D:0};NEED={CBP:0,CBTBE:0,DEV:0};
   cx.forEach(function(c){var b={id:c.id,sit:c.situacao,conv:c.convertida,notas:c.notas||[],it:[],units:0};BOX[c.id]=b;BOXES.push(b);b.notas.forEach(function(n){(NOTAS[n]=NOTAS[n]||[]).push(c.id)})});
   BOXES.sort(function(a,b){return (a.id==='S/Caixa')-(b.id==='S/Caixa')||a.id.localeCompare(b.id)});
   it.forEach(function(x){var b=BOX[x.caixa];if(!b)return;var r=[x.isbn,x.descricao,x.nota,x.estoque,x.cbp,x.cbtbe,x.dev,x.comp];b.it.push(r);b.units+=x.estoque;
     (BYISBN[x.isbn]=BYISBN[x.isbn]||[]).push({box:x.caixa,r:r});TOT.C+=x.cbp;TOT.E+=x.cbtbe;TOT.D+=x.dev});
   pd.forEach(function(p){(PED[p.isbn]=PED[p.isbn]||{})[p.evento]=p.qtd;TIT[p.isbn]=p.titulo});
-  Object.keys(PED).forEach(function(i){var c=0,e=0;(BYISBN[i]||[]).forEach(function(x){c+=x.r[4]-x.r[7];e+=x.r[5]});SOBRA[i]={CBP:c,CBTBE:e};if(i.length===10)ALIAS[isbn10to13(i)]=i});
-  Object.keys(PED).forEach(function(i){EVS.forEach(function(ev){NEED[ev]+=need(i,ev)})});
+  Object.keys(PED).forEach(function(i){var c=0,e=0,d=0;(BYISBN[i]||[]).forEach(function(x){c+=x.r[4]-x.r[7];e+=x.r[5];d+=x.r[6]});SOBRA[i]={CBP:c,CBTBE:e,DEV:d};if(i.length===10)ALIAS[isbn10to13(i)]=i});
+  Object.keys(PED).forEach(function(i){['CBP','CBTBE','DEV'].forEach(function(ev){NEED[ev]+=need(i,ev)})});
   return cx.length;
 }
 
@@ -43,7 +43,7 @@ function addLid(t,c,i,d,q){var k=lidKey(t,c,i),v=LID[k]||(LID[k]={C:0,K:0,E:0,D:
 function boxItemRead(c,i){var a=LID[lidKey('caixa',c,i)],b=LID[lidKey('item',c,i)],o={C:0,K:0,E:0,D:0,X:0};[a,b].forEach(function(v){if(v)for(var k in o)o[k]+=v[k]});return o}
 function boxRead(c){var b=BOX[c],t=0;if(!b)return 0;b.it.forEach(function(r){var x=boxItemRead(c,r[0]);t+=x.C+x.K+x.E+x.D});return t}
 function solto(i){return LID[lidKey('solto','',i)]||{C:0,K:0,E:0,D:0,X:0}}
-function falta(i,ev){return Math.max(0,need(i,ev)-solto(i)[ev==='CBP'?'C':'E'])}
+function falta(i,ev){return Math.max(0,need(i,ev)-solto(i)[ev==='CBP'?'C':ev==='CBTBE'?'E':'D'])}
 var versaoBanco=null;
 async function carregarEstado(){
   var d=await rpc('sep_estado',{});
@@ -75,7 +75,7 @@ function renderCounters(){
   var c=counts(),EVK={cbp:'CBP',cbtbe:'CBTBE',dev:'DEV'};
   var defs=[['CBP','cbp',c.C,TOT.C+NEED.CBP,'Sobra '+fmt(c.sC)+'/'+fmt(TOT.C)+' · soltos '+fmt(c.lC)+'/'+fmt(NEED.CBP)],
             ['CBTBE','cbtbe',c.E,TOT.E+NEED.CBTBE,'Sobra '+fmt(c.sE)+'/'+fmt(TOT.E)+' · soltos '+fmt(c.lE)+'/'+fmt(NEED.CBTBE)],
-            ['DEVOLUÇÃO','dev',c.D,TOT.D,'Sobra '+fmt(c.sD)+'/'+fmt(TOT.D)+(c.lD?' · soltos extras '+fmt(c.lD):'')]];
+            ['DEVOLUÇÃO POA','dev',c.D,TOT.D+NEED.DEV,'Sobra '+fmt(c.sD)+'/'+fmt(TOT.D)+' · soltos '+fmt(c.lD)+'/'+fmt(NEED.DEV)]];
   $('counters').innerHTML=defs.map(function(d){var f=Math.max(0,d[3]-d[2]),ev=EVK[d[1]];
     return '<div class="ctr c-'+d[1]+(sel===ev?' sel':'')+'" role="button" tabindex="0" data-ev="'+ev+'"><div class="l">'+d[0]+'</div><div class="v">'+fmt(d[2])+' <small>/ '+fmt(d[3])+'</small></div><div class="s">'+(f?'Faltam '+fmt(f)+' un':'Completo')+' · '+d[4]+'</div><div class="bar"><i style="width:'+(d[3]?Math.min(100,100*d[2]/d[3]):0).toFixed(1)+'%"></i></div><div class="tap">'+(sel===ev?'▲ Lista aberta abaixo':'▼ Toque para ver os títulos')+'</div></div>'}).join('');
 }
@@ -105,26 +105,27 @@ function pendRows(ev){
   var map={},key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:['D','X'];
   function add(i,o,p,l){var m=map[i]||(map[i]={i:i,prev:0,lido:0,o:{}});m.prev+=p;m.lido+=l;m.o[o]=1}
   BOXES.forEach(function(b){b.it.forEach(function(r){var pl=plan(r),x=boxItemRead(b.id,r[0]),p=0,l=0;key.forEach(function(k){p+=pl[k]||0;l+=x[k]||0});if(p||l)add(r[0],b.sit==='Aberta'||b.sit==='Avulso'?'separação':'caixa fechada',p,l)})});
-  if(ev!=='DEV')Object.keys(PED).forEach(function(i){var n=need(i,ev),g=solto(i)[ev==='CBP'?'C':'E'];if(n||g)add(i,'soltos',n,g)});
-  else Object.keys(LID).forEach(function(k){var p=k.split('|');if(p[0]==='solto'&&LID[k].D)add(p[2],'soltos extras',0,LID[k].D)});
+  var sk=ev==='CBP'?'C':ev==='CBTBE'?'E':'D';
+  Object.keys(PED).forEach(function(i){var n=need(i,ev),g=solto(i)[sk];if(n||g)add(i,'soltos',n,g)});
+  Object.keys(LID).forEach(function(k){var p=k.split('|');if(p[0]==='solto'&&!PED[p[2]]&&LID[k][sk])add(p[2],'soltos fora do plano',0,LID[k][sk])});
   return Object.keys(map).map(function(k){return map[k]});
 }
 function ondeAchar(i,ev){
   var out=[],key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:['D'];
   (BYISBN[i]||[]).forEach(function(x){var b=BOX[x.box],s=boxItemRead(x.box,i),pl=plan(x.r),f=0;key.forEach(function(k){f+=Math.max(0,(pl[k]||0)-(s[k]||0))});
     if(f)out.push('<span class="pill p-'+(b.sit==='Aberta'||b.sit==='Avulso'?'abrir':'dev')+'">'+(x.box==='S/Caixa'?'Avulsos':'Cx '+esc(x.box))+' · NF '+x.r[2]+' · '+f+'</span>')});
-  if(ev!=='DEV'&&falta(i,ev))out.push('<span class="pill" style="background:var(--bg-card-2);color:var(--text)">Estoque (solto) · '+falta(i,ev)+'</span>');
+  if(falta(i,ev))out.push('<span class="pill" style="background:var(--bg-card-2);color:var(--text)">Estoque (solto) · '+falta(i,ev)+'</span>');
   return out.join(' ');
 }
 function renderPend(){
   var box=$('lista');if(!sel){box.classList.add('hidden');return}box.classList.remove('hidden');
   var ev=sel,st=$('pSt').value,q=$('pQ').value.trim().toUpperCase(),all=pendRows(ev),tp=0,tl=0,nf=0;
   all.forEach(function(r){tp+=r.prev;tl+=Math.min(r.lido,r.prev);if(r.prev>r.lido)nf++});
-  $('lstTitle').textContent='Títulos do pedido '+(ev==='DEV'?'Devolução':ev);
+  $('lstTitle').textContent='Títulos do pedido '+(ev==='DEV'?'Devolução POA':ev);
   $('lstSum').textContent=all.length+' títulos · '+nf+' com unidades faltando · lido '+fmt(tl)+' de '+fmt(tp)+' previstas';
   var rows=all.filter(function(r){var f=r.prev>r.lido;return (st==='all'||(st==='falta'&&f)||(st==='ok'&&!f))&&(!q||r.i.indexOf(q)>=0||tituloDe(r.i).toUpperCase().indexOf(q)>=0)});
   rows.sort(function(a,b){return (b.prev-b.lido)-(a.prev-a.lido)||tituloDe(a.i).localeCompare(tituloDe(b.i))});
-  $('pend').innerHTML=rows.slice(0,600).map(function(r){var f=Math.max(0,r.prev-r.lido);return '<tr class="'+(f?'':'done')+'"><td>'+esc(tituloDe(r.i))+'</td><td class="mono">'+r.i+'</td><td class="n">'+r.prev+'</td><td class="n">'+r.lido+'</td><td class="n">'+(f?'<strong>'+f+'</strong>':'<span class="pill p-ok">completo</span>')+'</td><td>'+(f?ondeAchar(r.i,ev):(r.o['soltos extras']?'<span class="muted">soltos extras</span>':''))+'</td></tr>'}).join('')||'<tr><td colspan="6" class="muted">Nada neste filtro.</td></tr>';
+  $('pend').innerHTML=rows.slice(0,600).map(function(r){var f=Math.max(0,r.prev-r.lido);return '<tr class="'+(f?'':'done')+'"><td>'+esc(tituloDe(r.i))+'</td><td class="mono">'+r.i+'</td><td class="n">'+r.prev+'</td><td class="n">'+r.lido+'</td><td class="n">'+(f?'<strong>'+f+'</strong>':'<span class="pill p-ok">completo</span>')+'</td><td>'+(f?ondeAchar(r.i,ev):(r.o['soltos fora do plano']?'<span class="muted">soltos fora do plano</span>':''))+'</td></tr>'}).join('')||'<tr><td colspan="6" class="muted">Nada neste filtro.</td></tr>';
 }
 function render(){renderCounters();renderHist();renderBox();renderPend()}
 
@@ -181,7 +182,7 @@ function lerTitulo(raw){
     var s=await rpc('sep_bipar_solto',{p_isbn:i,p_prioridade:$('prio').value});
     addLid('solto','',i,s.destino,1);
     var nm=s.titulo||tituloDe(i);
-    if(s.destino==='D'){flash('dev','DEVOLUÇÃO',nm,s.no_pedido?'Os dois pedidos já estão completos para este título.':'Este título não está no pedido do CBP nem do CBTBE.');tone('D')}
+    if(s.destino==='D'){var dv=s.dev||{},fd=Math.max(0,(dv.precisa||0)-(dv.soltos||0));flash('dev','DEVOLUÇÃO POA',nm,!s.no_pedido?'Este título não está no plano. Separe para devolução e avise o responsável.':(dv.soltos<=dv.precisa?'Livro solto: unidade '+dv.soltos+' de '+dv.precisa+' da devolução POA.'+(fd?' Faltam '+fd+'.':' Devolução deste título completa.'):'CBP, CBTBE e devolução previstos já completos: esta unidade passa do estoque previsto. Avise o responsável.'));tone('D')}
     else{var ev=s.destino==='C'?'CBP':'CBTBE',me=s.destino==='C'?s.cbp:s.cbtbe,ot=s.destino==='C'?s.cbtbe:s.cbp,o=s.destino==='C'?'CBTBE':'CBP';
       var fm=Math.max(0,me.precisa-me.soltos),fo=Math.max(0,ot.precisa-ot.soltos);
       flash(s.destino==='C'?'cbp':'cbtbe',ev,nm,'Livro solto: unidade '+me.soltos+' de '+me.precisa+' que faltam no '+ev+'.'+(fm?' Faltam '+fm+'.':' '+ev+' completo neste título.')+(fo?' '+o+' ainda precisa de '+fo+'.':''));tone(s.destino)}
