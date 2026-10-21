@@ -64,8 +64,11 @@ var actx=null;
 function beep(f,d,n){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();for(var i=0;i<(n||1);i++){var o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.connect(g);g.connect(actx.destination);var t=actx.currentTime+i*(d+.06);g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.start(t);o.stop(t+d)}}catch(e){}}
 var TONE={C:[880,.12,1],K:[660,.12,2],E:[1180,.12,1],D:[330,.2,1],X:[330,.2,2],ERR:[200,.45,2],BOX:[990,.1,3]};
 function tone(k){beep.apply(null,TONE[k])}
-function flash(cls,dest,t,c,extra){var f=$('flash');f.className='flash f-'+cls;f.innerHTML='<div class="dest">'+esc(dest)+'</div>'+(t?'<div class="t">'+esc(t)+'</div>':'')+(c?'<div class="c">'+c+'</div>':'')+(extra||'')}
-function focusTit(){$('inTit').focus()}
+function flash(cls,dest,t,c,extra){var html='<div class="dest">'+esc(dest)+'</div>'+(t?'<div class="t">'+esc(t)+'</div>':'')+(c?'<div class="c">'+c+'</div>':'')+(extra||'');
+  var f=$('flash');f.className='flash f-'+cls;f.innerHTML=html;
+  if(camAberta){var r=$('camRes');r.className='cam-res f-'+cls;r.innerHTML=html}}
+var TOQUE=window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
+function focusTit(){if(camAberta||TOQUE)return;$('inTit').focus()}
 
 function counts(){
   var r={sC:0,sE:0,sD:0,lC:0,lE:0,lD:0};
@@ -190,6 +193,50 @@ function lerTitulo(raw){
   });
 }
 
+
+/* ---------- leitura pela câmera do celular ---------- */
+var camAberta=false,leitor=null,camPronto=true,camVisto=0,camLido=0,camTimer=null;
+var CAM_LIB='https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
+function carregarLib(){return new Promise(function(ok,erro){if(window.Html5Qrcode)return ok();var sc=document.createElement('script');sc.src=CAM_LIB;sc.onload=function(){ok()};sc.onerror=function(){erro(new Error('Não foi possível carregar o leitor da câmera.'))};document.head.appendChild(sc)})}
+function camEstado(txt,pronto){var e=$('camEstado');e.textContent=txt;e.className='cam-estado'+(pronto?' pronto':'')}
+function camCtx(){$('camCtx').textContent=cur?('Caixa ativa '+cur+' · '+(BOX[cur]?BOX[cur].sit:'')):'Livros soltos (sem caixa ativa)'}
+async function abrirCamera(){
+  if(camAberta)return;
+  camAberta=true;$('cam').classList.remove('hidden');document.body.style.overflow='hidden';
+  $('camRes').className='cam-res';$('camRes').innerHTML='<div class="dest">Aponte para o código de barras</div>';camCtx();camEstado('Iniciando câmera…');
+  try{
+    await carregarLib();
+    leitor=new Html5Qrcode('camView',{formatsToSupport:[Html5QrcodeSupportedFormats.EAN_13],verbose:false,experimentalFeatures:{useBarCodeDetectorIfSupported:true}});
+    await leitor.start({facingMode:'environment'},{fps:12,qrbox:function(w,h){var lw=Math.floor(Math.min(w*0.85,420));return {width:lw,height:Math.floor(lw*0.45)}}},lidoCamera,function(){});
+    camPronto=true;camEstado('Pronto: aponte para o código de barras',true);
+    clearInterval(camTimer);
+    camTimer=setInterval(function(){if(!camPronto&&Date.now()-camVisto>600&&Date.now()-camLido>900){camPronto=true;camEstado('Pronto para o próximo livro',true)}},150);
+  }catch(e){
+    var m=String(e&&e.message||e);
+    camEstado(/Permission|NotAllowed|denied/i.test(m)?'Sem permissão para usar a câmera. Libere a câmera nas configurações do navegador.':'Não foi possível abrir a câmera: '+m);
+  }
+}
+function lidoCamera(texto){
+  camVisto=Date.now();
+  if(!camPronto)return;
+  var d=String(texto||'').replace(/\D/g,'');
+  if(d.length!==13||!/^97[89]/.test(d)){camEstado('Este código não é um ISBN de livro');return}
+  camPronto=false;camLido=Date.now();
+  camEstado('Lido '+d+' · afaste o livro para ler o próximo');
+  try{navigator.vibrate&&navigator.vibrate(80)}catch(e){}
+  lerTitulo(d);
+  setTimeout(camCtx,400);
+}
+async function fecharCamera(){
+  clearInterval(camTimer);
+  try{if(leitor){await leitor.stop();leitor.clear()}}catch(e){}
+  leitor=null;camAberta=false;$('cam').classList.add('hidden');document.body.style.overflow='';
+}
+$('btnCam').addEventListener('click',abrirCamera);
+$('camFechar').addEventListener('click',fecharCamera);
+$('camUndo').addEventListener('click',function(){var h=HIST.filter(function(x){return !x.rev&&x.quem===nome})[0];if(h)reverter(h.grupo);else camEstado('Nenhuma leitura sua para reverter')});
+document.addEventListener('visibilitychange',function(){if(document.hidden&&camAberta)fecharCamera()});
+
 /* ---------- reverter ---------- */
 function reverter(grupo){
   enfileirar(async function(){
@@ -270,7 +317,7 @@ async function iniciarApp(){
   try{await iniciarDados();setSync('ok','SINCRONIZADO')}
   catch(e){if(!sessaoCaiu(e)){setSync('err','SEM CONEXÃO');flash('err','FALHA AO CARREGAR','',esc(e.message||e))}return}
   if(!poll)poll=setInterval(function(){if(token&&!document.hidden)agendarRefresh(10)},5000);
-  $('inNota').focus();
+  if(!TOQUE)$('inNota').focus();
 }
 if(token&&nome)iniciarApp();
 else{$('telaLogin').classList.remove('hidden');$('lgNome').value=nome;$('lgSenha').focus()}

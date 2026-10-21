@@ -134,6 +134,65 @@ footer{margin-top:30px;font-size:12px;color:var(--text-dim);border-top:1px solid
 .login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .login-card{width:100%;max-width:380px}
 input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius:8px;border:1px solid var(--border-strong);background:var(--bg-card-2);color:var(--text);width:100%}
+
+/* ---- campo de título com botão da câmera ---- */
+.tit-row{display:flex;gap:8px}
+.tit-row input{flex:1;min-width:0}
+.cam-btn{font-size:18px;white-space:nowrap}
+.f label{font-size:12px;color:var(--text-muted);font-weight:600}
+/* ---- tela da câmera ---- */
+.cam{position:fixed;inset:0;z-index:50;background:#000;color:#fff;display:flex;flex-direction:column;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px)}
+.cam-top,.cam-bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;font-weight:600}
+.cam-top .btn,.cam-bottom .btn{background:#222;color:#fff;border-color:#444}
+.cam-bottom .btn.warn{background:rgba(234,67,53,.25);color:#ff8a80;border-color:#ea4335}
+#camView{flex:1;min-height:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
+#camView video{width:100%!important;height:100%!important;object-fit:cover}
+.cam-res{margin:0 12px;border-radius:12px;padding:14px;text-align:center;border:2px solid #444;background:#111}
+.cam-res .dest{font-size:30px;font-weight:700;line-height:1.1}
+.cam-res .t{font-size:15px;margin-top:6px;font-weight:600;color:#fff}
+.cam-res .c{font-size:13px;margin-top:4px;color:#ccc}
+.cam-res.f-cbp{background:#1a3d7a;border-color:#4285f4;color:#cfe0ff}
+.cam-res.f-cbtbe{background:#14502a;border-color:#34a853;color:#c8f0d3}
+.cam-res.f-dev{background:#33363b;border-color:#9aa0a6;color:#e8eaed}
+.cam-res.f-abrir{background:#4d3a00;border-color:#fbbc04;color:#ffe9a6}
+.cam-res.f-err{background:#5c1612;border-color:#ea4335;color:#ffd2cc}
+.cam-res .compnote{color:var(--text)}
+.cam-estado{font-size:13px;color:#bbb;font-weight:500}
+.cam-estado.pronto{color:#7ee2a0}
+/* ---- celular ---- */
+@media (max-width:640px){
+  .container{padding:8px 10px 40px}
+  .top{margin-bottom:8px}
+  .top h1{font-size:16px;line-height:1.2}
+  #quem{display:none}
+  .counters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:6px 0;grid-template-columns:repeat(3,1fr);gap:6px}
+  .ctr{padding:8px 8px;border-width:2px}
+  .ctr .l{font-size:10px;letter-spacing:.03em}
+  .ctr .v{font-size:19px}
+  .ctr .v small{display:block;font-size:12px}
+  .ctr .s,.ctr .tap{display:none}
+  .ctr .bar{margin-top:5px;height:4px}
+  .card{padding:12px;margin-top:10px}
+  .inputs{grid-template-columns:1fr 1fr;gap:8px}
+  .inputs .tit{grid-column:1/-1}
+  input[type=text],input[type=password]{font-size:17px;padding:10px}
+  #inTit{font-size:18px}
+  .cam-btn span{display:none}
+  .cam-btn{font-size:22px;padding:8px 14px}
+  .hint{display:none}
+  .flash{padding:14px;margin-top:10px}
+  .flash .dest{font-size:30px}
+  .flash .t{font-size:15px}
+  .flash.idle .dest{font-size:16px}
+  h2{font-size:14px}
+  #btnUndo{width:100%;margin-top:6px}
+  .hist-tbl th:nth-child(5),.hist-tbl td:nth-child(5){display:none}
+  table{font-size:12px}
+  td,th{padding:7px 6px}
+  .ctx{font-size:13px}
+  details summary{padding:10px 12px}
+  .lst-head .btn{padding:6px 10px}
+}
 </style>
 </head>
 <body>
@@ -161,7 +220,7 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
     <div class="inputs">
       <label class="f">Nota<input id="inNota" class="in-nota mono" type="text" inputmode="numeric" autocomplete="off" placeholder="476061"></label>
       <label class="f">Nº da caixa<input id="inCaixa" class="in-caixa mono" type="text" autocomplete="off" placeholder="0007"></label>
-      <label class="f tit">Bipar título (ISBN)<input id="inTit" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="aguardando leitura…"></label>
+      <div class="f tit"><label for="inTit">Bipar título (ISBN)</label><div class="tit-row"><input id="inTit" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="aguardando leitura…"><button type="button" class="btn cam-btn" id="btnCam" aria-label="Ler com a câmera">📷<span> Câmera</span></button></div></div>
     </div>
     <p class="hint">Caixa: digite a nota e o número e tecle Enter (7 vira 0007; “S” para os avulsos sem caixa). Título: bipe o ISBN. Com uma caixa aberta ativa, o título é separado conforme essa caixa; sem caixa ativa, é tratado como livro solto do estoque.</p>
     <div id="ctx"></div>
@@ -172,7 +231,7 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
   <div class="two">
     <div class="card">
       <h2>Últimas leituras da equipe <button class="btn warn" id="btnUndo" disabled>↶ Reverter minha última leitura</button></h2>
-      <div class="tbl-wrap"><table><thead><tr><th>Hora</th><th>Leitura</th><th>Destino</th><th class="n">Un</th><th>Quem</th><th></th></tr></thead><tbody id="hist"></tbody></table></div>
+      <div class="tbl-wrap"><table class="hist-tbl"><thead><tr><th>Hora</th><th>Leitura</th><th>Destino</th><th class="n">Un</th><th>Quem</th><th></th></tr></thead><tbody id="hist"></tbody></table></div>
     </div>
     <div class="card">
       <h2 id="boxTitle">Caixa ativa</h2>
@@ -205,6 +264,12 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
   <footer>Dados no Supabase (projeto Controle de eventos, tabelas sep_*). Código e plano em dados/plano.json no GitHub. CBP inclui o arredondamento das caixas inteiras; Devolução POA = sobra + livros soltos que não vão para os pedidos.</footer>
 </div>
 
+<div id="cam" class="cam hidden" role="dialog" aria-label="Leitura pela câmera">
+  <div class="cam-top"><span id="camCtx">Livros soltos</span><button type="button" class="btn sm" id="camFechar">Fechar</button></div>
+  <div id="camView"></div>
+  <div id="camRes" class="cam-res"><div class="dest">Aponte para o código de barras</div></div>
+  <div class="cam-bottom"><span id="camEstado" class="cam-estado">Iniciando câmera…</span><button type="button" class="btn sm warn" id="camUndo">↶ Reverter última</button></div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
