@@ -93,11 +93,15 @@ function renderCounters(){
 }
 function destLabel(h){var ks=Object.keys(h.dest);if(ks.length>1&&ks.every(function(k){return k==='C'||k==='K'}))return ['CBP','cbp'];
   if(ks.length>1)return ['VÁRIOS','abrir'];var k=ks[0];return [DEST[k]+(k==='K'?' compl.':k==='X'?' exced.':''),DCLS[k]]}
+var HISTB=null,histT=null;
 function renderHist(){
+  var lista=HISTB||HIST;
+  $('histTitulo').textContent=HISTB?'Resultado da busca':'Últimas leituras da equipe';
+  $('histInfo').textContent=HISTB?(HISTB.length?HISTB.length+' leitura(s) encontrada(s)'+(HISTB.length>=150?' (mostrando as 150 mais recentes)':'')+'. Apague a busca para voltar às últimas leituras.':'Nenhuma leitura encontrada.'):'';
   var mine=HIST.filter(function(h){return !h.rev&&h.quem===nome});
   $('btnUndo').disabled=!mine.length;
-  $('hist').innerHTML=HIST.map(function(h){var t=new Date(h.ts),dl=destLabel(h);
-    return '<tr class="'+(h.rev?'rev':'')+'"><td class="mono">'+t.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</td><td>'+esc(h.rotulo)+'</td><td><span class="pill p-'+dl[1]+'">'+esc(dl[0])+'</span></td><td class="n">'+h.q+'</td><td class="muted">'+esc(h.quem||'')+'</td><td>'+(h.rev?'<span class="muted" style="font-size:11px">revertido</span>':'<button class="btn sm'+(armed===h.grupo?' warn':'')+'" data-rev="'+h.grupo+'">'+(armed===h.grupo?'Confirmar?':'Reverter')+'</button>')+'</td></tr>'}).join('')||'<tr><td colspan="6" class="muted">Nenhuma leitura ainda.</td></tr>';
+  $('hist').innerHTML=lista.map(function(h){var t=new Date(h.ts),dl=destLabel(h);
+    return '<tr class="'+(h.rev?'rev':'')+'"><td class="mono">'+(HISTB?t.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' ':'')+t.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})+'</td><td>'+esc(h.rotulo)+'</td><td><span class="pill p-'+dl[1]+'">'+esc(dl[0])+'</span></td><td class="n">'+h.q+'</td><td class="muted">'+esc(h.quem||'')+'</td><td>'+(h.rev?'<span class="muted" style="font-size:11px">revertido</span>':'<button class="btn sm'+(armed===h.grupo?' warn':'')+'" data-rev="'+h.grupo+'">'+(armed===h.grupo?'Confirmar?':'Reverter')+'</button>')+'</td></tr>'}).join('')||'<tr><td colspan="6" class="muted">Nenhuma leitura ainda.</td></tr>';
 }
 function renderBox(){
   var ctx=$('ctx'),bt=$('boxTitle'),bb=$('boxBody');
@@ -250,14 +254,20 @@ $('camFechar').addEventListener('click',fecharCamera);
 $('camUndo').addEventListener('click',function(){var h=HIST.filter(function(x){return !x.rev&&x.quem===nome})[0];if(h)reverter(h.grupo);else camEstado('Nenhuma leitura sua para reverter')});
 document.addEventListener('visibilitychange',function(){if(document.hidden&&camAberta)fecharCamera()});
 
+/* ---------- busca no histórico ---------- */
+function normHist(h){var m={};(h.dest||[]).forEach(function(k){m[k]=1});h.dest=m;return h}
+async function buscarHist(){var q=$('histQ').value.trim();if(!q||(q.length<2&&!/^\d+$/.test(q))){HISTB=null;return}
+  var d=await rpc('sep_buscar_leituras',{p_q:q});HISTB=(d||[]).map(normHist)}
+$('histQ').addEventListener('input',function(){clearTimeout(histT);histT=setTimeout(async function(){try{await buscarHist()}catch(e){}renderHist()},350)});
+
 /* ---------- reverter ---------- */
 function reverter(grupo){
   enfileirar(async function(){
-    var h=HIST.filter(function(x){return x.grupo===grupo})[0];
+    var h=(HISTB||[]).concat(HIST).filter(function(x){return x.grupo===grupo})[0];
     var d=await rpc('sep_reverter',{p_grupo:grupo});
     if(d.status==='ja_revertida'){flash('dev','JÁ REVERTIDA',h?h.rotulo:'','Esta leitura já tinha sido revertida.');}
     else{var dl=h?destLabel(h)[0]:'';flash('err','REVERTIDO',h?h.rotulo:'',(h&&h.tipo==='caixa'?'Leitura da caixa desfeita: '+d.qtd+' un retiradas de ':'Retire esta unidade de ')+dl+'. Contadores ajustados.');beep(500,.15,1)}
-    await carregarEstado();render();focusTit();
+    await carregarEstado();if(HISTB)await buscarHist();render();focusTit();
   });
 }
 $('hist').addEventListener('click',function(e){var b=e.target.closest('[data-rev]');if(!b)return;var g=b.dataset.rev;
