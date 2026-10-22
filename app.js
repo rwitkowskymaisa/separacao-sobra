@@ -182,24 +182,39 @@ function lerCaixa(){
 }
 
 /* ---------- título ---------- */
-function lerTitulo(raw){
+function qtdAtual(){var q=parseInt($('inQtd').value,10);return isFinite(q)&&q>0?Math.min(q,999):1}
+function partesTxt(p){var o=[];[['C','CBP'],['K','CBP compl.'],['E','CBTBE'],['D','DEVOLUÇÃO POA'],['X','excedente (devolução)']].forEach(function(x){if(p&&p[x[0]])o.push(x[1]+' '+p[x[0]])});return o}
+function lerTitulo(raw,qtdForcada){
   var i=(raw||'').replace(/[^0-9Xx]/g,'').toUpperCase();if(!i)return;
+  var q=qtdForcada||qtdAtual();$('inQtd').value=1;
   if(!PED[i]&&!BYISBN[i]&&ALIAS[i])i=ALIAS[i];
   var cx=cur,cn=curNota;
   enfileirar(async function(){
     if(cx){
       var b=BOX[cx];
-      var d=await rpc('sep_bipar_item',{p_caixa:cx,p_isbn:i,p_nota:cn});
+      var d=await rpc('sep_bipar_item',{p_caixa:cx,p_isbn:i,p_nota:cn,p_qtd:q});
       if(d.status==='nao_pertence'){var where=(BYISBN[i]||[]).map(function(x){return x.box+' (NF '+x.r[2]+')'});
         flash('err','NÃO É DESTA CAIXA',tituloDe(i),'Caixa ativa: '+cx+' · NF '+cn+'. '+(where.length?'Este título está nas caixas '+where.slice(0,8).join(', ')+'.':'Este título não está na sobra.')+' Se for um livro solto, feche a caixa ativa e bipe de novo.');tone('ERR');return}
-      var k=d.destino;addLid('item',cx,i,k,1);
+      var pt=d.partes||{};pt[d.destino]=pt[d.destino]||1;['C','K','E','D','X'].forEach(function(z){if(pt[z])addLid('item',cx,i,z,pt[z])});
+      var lst=partesTxt(pt);
+      if(lst.length>1){var c2='Separe assim: <strong>'+lst.join(' · ')+'</strong>.';if(d.faltam_titulo>0)c2+=' Faltam '+d.faltam_titulo+' un deste título na caixa.';
+        if(d.lido_caixa>=d.total_caixa){c2+=' <strong>Caixa '+cx+' · NF '+cn+' concluída.</strong>';if(cur===cx&&curNota===cn){cur=null;curNota=null}}
+        flash('abrir','DIVIDIR '+q+' UN',d.descricao||tituloDe(i),c2);tone('BOX');render();agendarRefresh();return}
+      var k=d.destino;
+      if(q>1){var c3=q+' un para '+DEST[k]+(k==='K'?' (complemento)':k==='X'?' (excedente)':'')+'.';if(d.faltam_titulo>0)c3+=' Faltam '+d.faltam_titulo+' un deste título na caixa.';
+        if(d.lido_caixa>=d.total_caixa){c3+=' <strong>Caixa '+cx+' · NF '+cn+' concluída.</strong>';if(cur===cx&&curNota===cn){cur=null;curNota=null}}
+        flash(DCLS[k],(k==='K'?'CBP · COMPLEMENTO':DEST[k])+' · '+q+' UN',d.descricao||tituloDe(i),c3);tone(k);render();agendarRefresh();return}
       var c=k==='X'?'Unidade a mais do que o previsto nesta caixa (excedente): separar para devolução.':k==='K'?'Complemento do pedido CBP: unidade '+d.n+' de '+d.previsto+'.':'Unidade '+d.n+' de '+d.previsto+' deste título para '+DEST[k]+'.';
       if(d.faltam_titulo>0)c+=' Faltam '+d.faltam_titulo+' un deste título na caixa.';
       if(d.lido_caixa>=d.total_caixa){c+=' <strong>Caixa '+cx+' · NF '+cn+' concluída.</strong>';if(cur===cx&&curNota===cn){cur=null;curNota=null}}
       flash(DCLS[k],k==='K'?'CBP · COMPLEMENTO':DEST[k],d.descricao||tituloDe(i),c);tone(k);render();agendarRefresh();return}
-    var s=await rpc('sep_bipar_solto',{p_isbn:i,p_prioridade:$('prio').value});
-    addLid('solto','',i,s.destino,1);
+    var s=await rpc('sep_bipar_solto',{p_isbn:i,p_prioridade:$('prio').value,p_qtd:q});
+    var ps=s.partes||{};if(!s.partes)ps[s.destino]=1;['C','E','D'].forEach(function(z){if(ps[z])addLid('solto','',i,z,ps[z])});
     var nm=s.titulo||tituloDe(i);
+    if(q>1){var ls=partesTxt(ps),dv2=s.dev||{};
+      var cls2=ls.length>1?'abrir':ps.C?'cbp':ps.E?'cbtbe':'dev',big=ls.length>1?'DIVIDIR '+q+' UN':(ps.C?'CBP':ps.E?'CBTBE':'DEVOLUÇÃO POA')+' · '+q+' UN';
+      var extra2=(ps.D&&dv2.soltos>dv2.precisa)?' Atenção: a devolução deste título passou do previsto ('+dv2.soltos+' de '+dv2.precisa+'). Confira a quantidade.':'';
+      flash(cls2,big,nm,'Livro solto: separe <strong>'+ls.join(' · ')+'</strong>.'+extra2);tone(ls.length>1?'BOX':ps.C?'C':ps.E?'E':'D');render();agendarRefresh();return}
     if(s.destino==='D'){var dv=s.dev||{},fd=Math.max(0,(dv.precisa||0)-(dv.soltos||0));flash('dev','DEVOLUÇÃO POA',nm,!s.no_pedido?'Este título não está no plano. Separe para devolução e avise o responsável.':(dv.soltos<=dv.precisa?'Livro solto: unidade '+dv.soltos+' de '+dv.precisa+' da devolução POA.'+(fd?' Faltam '+fd+'.':' Devolução deste título completa.'):'CBP, CBTBE e devolução previstos já completos: esta unidade passa do estoque previsto. Avise o responsável.'));tone('D')}
     else{var ev=s.destino==='C'?'CBP':'CBTBE',me=s.destino==='C'?s.cbp:s.cbtbe,ot=s.destino==='C'?s.cbtbe:s.cbp,o=s.destino==='C'?'CBTBE':'CBP';
       var fm=Math.max(0,me.precisa-me.soltos),fo=Math.max(0,ot.precisa-ot.soltos);
@@ -210,7 +225,7 @@ function lerTitulo(raw){
 
 
 /* ---------- leitura pela câmera do celular ---------- */
-var camAberta=false,leitor=null,camPronto=true,camVisto=0,camLido=0,camTimer=null;
+var camPendente=null,camAberta=false,leitor=null,camPronto=true,camVisto=0,camLido=0,camTimer=null;
 var CAM_LIB='https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
 function carregarLib(){return new Promise(function(ok,erro){if(window.Html5Qrcode)return ok();var sc=document.createElement('script');sc.src=CAM_LIB;sc.onload=function(){ok()};sc.onerror=function(){erro(new Error('Não foi possível carregar o leitor da câmera.'))};document.head.appendChild(sc)})}
 function camEstado(txt,pronto){var e=$('camEstado');e.textContent=txt;e.className='cam-estado'+(pronto?' pronto':'')}
@@ -226,7 +241,7 @@ async function abrirCamera(){
     await leitor.start({facingMode:'environment'},{fps:12,qrbox:function(w,h){var lw=Math.floor(Math.min(w*0.85,420));return {width:lw,height:Math.floor(lw*0.45)}}},lidoCamera,function(){});
     camPronto=true;camEstado('Pronto: aponte para o código de barras',true);
     clearInterval(camTimer);
-    camTimer=setInterval(function(){if(!camPronto&&Date.now()-camVisto>800&&Date.now()-camLido>1500){camPronto=true;camEstado('Pronto para o próximo livro',true)}},150);
+    camTimer=setInterval(function(){if(!camPronto&&!camPendente&&Date.now()-camVisto>800&&Date.now()-camLido>1500){camPronto=true;camEstado('Pronto para o próximo livro',true)}},150);
   }catch(e){
     var m=String(e&&e.message||e);
     camEstado(/Permission|NotAllowed|denied/i.test(m)?'Sem permissão para usar a câmera. Libere a câmera nas configurações do navegador.':'Não foi possível abrir a câmera: '+m);
@@ -241,15 +256,20 @@ function lidoCamera(texto){
   camEstado('Lido '+d+' · afaste o livro para ler o próximo');
   beep(1600,.09,1);
   try{navigator.vibrate&&navigator.vibrate(120)}catch(e){}
+  if($('modoQtd').checked){camPendente=d;$('camQtdTit').textContent=tituloDe(d)+' ('+d+')';$('camQtd').value=1;$('camQtdBox').classList.remove('hidden');camEstado('Digite a quantidade e toque em Registrar');$('camQtd').focus();$('camQtd').select();return}
   lerTitulo(d);
   setTimeout(camCtx,400);
 }
 async function fecharCamera(){
-  clearInterval(camTimer);
+  clearInterval(camTimer);camPendente=null;$('camQtdBox').classList.add('hidden');
   try{if(leitor){await leitor.stop();leitor.clear()}}catch(e){}
   leitor=null;camAberta=false;$('cam').classList.add('hidden');document.body.style.overflow='';
 }
 $('btnCam').addEventListener('click',abrirCamera);
+function camQtdFechar(){camPendente=null;$('camQtdBox').classList.add('hidden');camLido=Date.now();camVisto=Date.now()}
+$('camQtdOk').addEventListener('click',function(){if(!camPendente)return;var q=parseInt($('camQtd').value,10);q=isFinite(q)&&q>0?Math.min(q,999):1;var p=camPendente;camQtdFechar();lerTitulo(p,q);setTimeout(camCtx,400)});
+$('camQtd').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();$('camQtdOk').click()}});
+$('camQtdCancel').addEventListener('click',function(){camQtdFechar();camEstado('Leitura cancelada. Afaste o livro para ler o próximo.')});
 $('camFechar').addEventListener('click',fecharCamera);
 $('camUndo').addEventListener('click',function(){var h=HIST.filter(function(x){return !x.rev&&x.quem===nome})[0];if(h)reverter(h.grupo);else camEstado('Nenhuma leitura sua para reverter')});
 document.addEventListener('visibilitychange',function(){if(document.hidden&&camAberta)fecharCamera()});
@@ -278,7 +298,15 @@ $('btnUndo').addEventListener('click',function(){var h=HIST.filter(function(x){r
 /* ---------- eventos de entrada ---------- */
 $('inNota').addEventListener('keydown',function(e){if(e.key!=='Enter')return;e.preventDefault();if($('inCaixa').value.trim())lerCaixa();else{var v=this.value.replace(/\D/g,'');if(v.length>=10){this.value='';lerTitulo(v)}else $('inCaixa').focus()}});
 $('inCaixa').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();lerCaixa()}});
-$('inTit').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var v=this.value;this.value='';lerTitulo(v);this.focus()}});
+var pendIsbn=null;
+function mostrarPend(){var el=$('pend1');if(!pendIsbn){el.innerHTML='';return}el.innerHTML='<div class="pendente">Lido <b>'+esc(tituloDe(pendIsbn))+'</b> ('+pendIsbn+'). Digite a quantidade e tecle Enter. <button class="btn sm" id="pendCancel">Cancelar</button></div>';$('pendCancel').onclick=function(){pendIsbn=null;mostrarPend();focusTit()}}
+$('modoQtd').checked=lsGet('modoQtd','0')==='1';
+$('modoQtd').addEventListener('change',function(){lsSet('modoQtd',this.checked?'1':'0');pendIsbn=null;mostrarPend()});
+$('inQtd').addEventListener('keydown',function(e){if(e.key!=='Enter')return;e.preventDefault();
+  if(pendIsbn){var p=pendIsbn;pendIsbn=null;mostrarPend();lerTitulo(p);$('inTit').focus()}else $('inTit').focus()});
+$('inTit').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();var v=this.value;this.value='';
+  if($('modoQtd').checked){var i2=v.replace(/[^0-9Xx]/g,'').toUpperCase();if(!i2)return;if(!PED[i2]&&!BYISBN[i2]&&ALIAS[i2])i2=ALIAS[i2];pendIsbn=i2;mostrarPend();$('inQtd').value=1;$('inQtd').focus();$('inQtd').select();return}
+  lerTitulo(v);this.focus()}});
 function onCtr(e){var c=e.target.closest('.ctr');if(!c)return;if(e.type==='keydown'){if(e.key!=='Enter'&&e.key!==' ')return;e.preventDefault()}
   sel=(sel===c.dataset.ev)?null:c.dataset.ev;$('pQ').value='';render();if(sel)setTimeout(function(){$('lista').scrollIntoView({behavior:'smooth',block:'start'})},30)}
 $('counters').addEventListener('click',onCtr);$('counters').addEventListener('keydown',onCtr);

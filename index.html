@@ -138,6 +138,17 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
 /* ---- campo de título com botão da câmera ---- */
 .tit-row{display:flex;gap:8px}
 .tit-row input{flex:1;min-width:0}
+.tit-row input.qtd{flex:0 0 84px;text-align:center}
+.tit-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.modo-qtd{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);font-weight:600;cursor:pointer}
+.modo-qtd input{width:18px;height:18px}
+.pendente{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--abrir-soft);border:1px solid var(--abrir);font-size:14px}
+.cam-qtd{margin:10px 12px 0;padding:12px;border-radius:12px;background:#1e1e1e;border:2px solid #fbbc04}
+.cam-qtd-tit{font-weight:600;margin-bottom:8px;color:#ffe9a6}
+.cam-qtd-row{display:flex;gap:8px}
+.cam-qtd-row input{flex:1;min-width:0;font-size:24px;padding:8px 10px;border-radius:8px;border:1px solid #555;background:#000;color:#fff;text-align:center}
+.cam-qtd-row .btn{background:#222;color:#fff;border-color:#444}
+.cam-qtd-row .btn.primary{background:#1a73e8;border-color:#1a73e8}
 .cam-btn{font-size:18px;white-space:nowrap}
 .f label{font-size:12px;color:var(--text-muted);font-weight:600}
 /* ---- tela da câmera ---- */
@@ -220,9 +231,10 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
     <div class="inputs">
       <label class="f">Nota<input id="inNota" class="in-nota mono" type="text" inputmode="numeric" autocomplete="off" placeholder="476061"></label>
       <label class="f">Nº da caixa<input id="inCaixa" class="in-caixa mono" type="text" autocomplete="off" placeholder="0007"></label>
-      <div class="f tit"><label for="inTit">Bipar título (ISBN)</label><div class="tit-row"><input id="inTit" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="aguardando leitura…"><button type="button" class="btn cam-btn" id="btnCam" aria-label="Ler com a câmera">📷<span> Câmera</span></button></div></div>
+      <div class="f tit"><div class="tit-head"><label for="inTit">Bipar título (ISBN)</label><label class="modo-qtd"><input type="checkbox" id="modoQtd"> Bipar 1 e digitar a quantidade</label></div><div class="tit-row"><input id="inTit" class="mono" type="text" inputmode="numeric" autocomplete="off" placeholder="aguardando leitura…"><input id="inQtd" class="mono qtd" type="number" inputmode="numeric" min="1" max="999" value="1" aria-label="Quantidade" title="Quantidade"><button type="button" class="btn cam-btn" id="btnCam" aria-label="Ler com a câmera">📷<span> Câmera</span></button></div></div>
     </div>
     <p class="hint">Caixa: digite a nota e o número e tecle Enter (7 vira 0007; “S” para os avulsos sem caixa). Título: bipe o ISBN. Com uma caixa aberta ativa, o título é separado conforme essa caixa; sem caixa ativa, é tratado como livro solto do estoque.</p>
+    <div id="pend1"></div>
     <div id="ctx"></div>
   </div>
 
@@ -270,10 +282,11 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
   <div class="cam-top"><span id="camCtx">Livros soltos</span><button type="button" class="btn sm" id="camFechar">Fechar</button></div>
   <div id="camView"></div>
   <div id="camRes" class="cam-res"><div class="dest">Aponte para o código de barras</div></div>
+  <div id="camQtdBox" class="cam-qtd hidden"><div class="cam-qtd-tit" id="camQtdTit"></div><div class="cam-qtd-row"><input id="camQtd" class="mono" type="number" inputmode="numeric" min="1" max="999" value="1"><button type="button" class="btn primary" id="camQtdOk">Registrar</button><button type="button" class="btn" id="camQtdCancel">Cancelar</button></div></div>
   <div class="cam-bottom"><span id="camEstado" class="cam-estado">Iniciando câmera…</span><button type="button" class="btn sm warn" id="camUndo">↶ Reverter última</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-<script src="config.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="config.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>
