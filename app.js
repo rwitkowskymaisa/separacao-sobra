@@ -10,12 +10,12 @@ function lsGet(k,d){try{var v=localStorage.getItem(LSK+'-'+k);return v==null?d:v
 function lsSet(k,v){try{localStorage.setItem(LSK+'-'+k,v)}catch(e){}}
 
 /* ---------- plano (vem do Supabase) ---------- */
-var BOX={},BOXES=[],NOTAS={},BYISBN={},PED={},TIT={},SOBRA={},ALIAS={},TOT={C:0,E:0,D:0},NEED={CBP:0,CBTBE:0,DEV:0};
+var BOX={},BOXES=[],NOTAS={},BYISBN={},PED={},TIT={},SOBRA={},ALIAS={},TOT={C:0,E:0,D:0},NEED={CBP:0,CBTBE:0,DEV:0,URG:0};
 var BK=['C','K','E','D'],EVS=['CBP','CBTBE'];
-var DEST={C:'CBP',K:'CBP',E:'CBTBE',D:'DEVOLUÇÃO POA',X:'DEVOLUÇÃO POA'},DCLS={C:'cbp',K:'cbp',E:'cbtbe',D:'dev',X:'dev'};
+var DEST={C:'CBP',K:'CBP',E:'CBTBE',D:'DEVOLUÇÃO POA',X:'DEVOLUÇÃO POA',U:'URGÊNCIA DEV'},DCLS={C:'cbp',K:'cbp',E:'cbtbe',D:'dev',X:'dev',U:'urg'};
 function plan(r){return {C:r[4]-r[7],K:r[7],E:r[5],D:r[6]}}
 function isbn10to13(d){var b='978'+d.slice(0,9),s=0;for(var i=0;i<12;i++)s+=(+b[i])*(i%2?3:1);return b+((10-s%10)%10)}
-function need(i,ev){return Math.max(0,((PED[i]||{})[ev]||0)-((SOBRA[i]||{})[ev]||0))}
+function need(i,ev){return Math.max(0,((PED[i]||{})[ev]||0)-(ev==='URG'?0:((SOBRA[i]||{})[ev]||0)))}
 function tituloDe(i){return TIT[i]||((BYISBN[i]||[])[0]?BYISBN[i][0].r[1]:i)}
 
 var PLANO_INFO=null;
@@ -25,21 +25,21 @@ async function carregarPlanoDoBanco(){
   var cx=d.caixas.map(function(c){return {id:c[0],situacao:c[1],convertida:c[2],notas:c[3]}});
   var it=d.itens.map(function(x){return {caixa:x[0],isbn:x[1],descricao:x[2],nota:x[3],estoque:x[4],cbp:x[5],comp:x[6],cbtbe:x[7],dev:x[8]}});
   var pd=d.pedidos.map(function(p){return {isbn:p[0],evento:p[1],titulo:p[2],qtd:p[3]}});
-  BOX={};BOXES=[];NOTAS={};BYISBN={};PED={};TIT={};SOBRA={};ALIAS={};TOT={C:0,E:0,D:0};NEED={CBP:0,CBTBE:0,DEV:0};
+  BOX={};BOXES=[];NOTAS={};BYISBN={};PED={};TIT={};SOBRA={};ALIAS={};TOT={C:0,E:0,D:0};NEED={CBP:0,CBTBE:0,DEV:0,URG:0};
   cx.forEach(function(c){var b={id:c.id,sit:c.situacao,conv:c.convertida,notas:c.notas||[],it:[],units:0};BOX[c.id]=b;BOXES.push(b);b.notas.forEach(function(n){(NOTAS[n]=NOTAS[n]||[]).push(c.id)})});
   BOXES.sort(function(a,b){return (a.id==='S/Caixa')-(b.id==='S/Caixa')||a.id.localeCompare(b.id)});
   it.forEach(function(x){var b=BOX[x.caixa];if(!b)return;var r=[x.isbn,x.descricao,x.nota,x.estoque,x.cbp,x.cbtbe,x.dev,x.comp];b.it.push(r);b.units+=x.estoque;
     (BYISBN[x.isbn]=BYISBN[x.isbn]||[]).push({box:x.caixa,r:r});TOT.C+=x.cbp;TOT.E+=x.cbtbe;TOT.D+=x.dev});
   pd.forEach(function(p){(PED[p.isbn]=PED[p.isbn]||{})[p.evento]=p.qtd;TIT[p.isbn]=p.titulo});
   Object.keys(PED).forEach(function(i){var c=0,e=0,d=0;(BYISBN[i]||[]).forEach(function(x){c+=x.r[4]-x.r[7];e+=x.r[5];d+=x.r[6]});SOBRA[i]={CBP:c,CBTBE:e,DEV:d};if(i.length===10)ALIAS[isbn10to13(i)]=i});
-  Object.keys(PED).forEach(function(i){['CBP','CBTBE','DEV'].forEach(function(ev){NEED[ev]+=need(i,ev)})});
+  Object.keys(PED).forEach(function(i){['CBP','CBTBE','DEV','URG'].forEach(function(ev){NEED[ev]+=need(i,ev)})});
   return cx.length;
 }
 
 /* ---------- leituras ---------- */
 var LID={},HIST=[];   // LID['tipo|caixa|isbn'] = {C,K,E,D,X}
 function lidKey(t,c,i){return t+'|'+(c||'')+'|'+i}
-function addLid(t,c,i,d,q){var k=lidKey(t,c,i),v=LID[k]||(LID[k]={C:0,K:0,E:0,D:0,X:0});v[d]+=q}
+function addLid(t,c,i,d,q){var k=lidKey(t,c,i),v=LID[k]||(LID[k]={C:0,K:0,E:0,D:0,X:0,U:0});v[d]=(v[d]||0)+q}
 function boxItemRead(c,i){var a=LID[lidKey('caixa',c,i)],b=LID[lidKey('item',c,i)],o={C:0,K:0,E:0,D:0,X:0};[a,b].forEach(function(v){if(v)for(var k in o)o[k]+=v[k]});return o}
 function boxRead(c){var b=BOX[c],t=0;if(!b)return 0;b.it.forEach(function(r){var x=boxItemRead(c,r[0]);t+=x.C+x.K+x.E+x.D});return t}
 // caixa física = número da caixa + nota fiscal
@@ -48,8 +48,9 @@ function unidFis(c,n){return itensFis(c,n).reduce(function(a,r){return a+r[3]},0
 function lidoFis(c,n){return itensFis(c,n).reduce(function(a,r){var x=boxItemRead(c,r[0]);return a+x.C+x.K+x.E+x.D},0)}
 function sitFis(c,n){if(c==='S/Caixa')return 'Avulso';var it=itensFis(c,n),t=0,C=0,E=0,D=0;it.forEach(function(r){t+=r[3];C+=r[4];E+=r[5];D+=r[6]});
   if(!t)return null;return C===t?'Inteira CBP':E===t?'Inteira CBTBE':D===t?'Devolução fechada':'Aberta'}
-function solto(i){return LID[lidKey('solto','',i)]||{C:0,K:0,E:0,D:0,X:0}}
-function falta(i,ev){return Math.max(0,need(i,ev)-solto(i)[ev==='CBP'?'C':ev==='CBTBE'?'E':'D'])}
+function solto(i){return LID[lidKey('solto','',i)]||{C:0,K:0,E:0,D:0,X:0,U:0}}
+function SK(ev){return ev==='CBP'?'C':ev==='CBTBE'?'E':ev==='URG'?'U':'D'}
+function falta(i,ev){return Math.max(0,need(i,ev)-(solto(i)[SK(ev)]||0))}
 var versaoBanco=null;
 async function carregarEstado(){
   var d=await rpc('sep_estado',{});
@@ -71,7 +72,7 @@ function audioAtivar(){try{actx=actx||new (window.AudioContext||window.webkitAud
   var o=actx.createOscillator(),g=actx.createGain();g.gain.value=0.0001;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+0.02)}catch(e){}}
 ['pointerdown','touchstart','keydown'].forEach(function(ev){document.addEventListener(ev,function una(){audioAtivar();document.removeEventListener(ev,una,true)},true)});
 function beep(f,d,n){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();for(var i=0;i<(n||1);i++){var o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.connect(g);g.connect(actx.destination);var t=actx.currentTime+i*(d+.06);g.gain.setValueAtTime(.18,t);g.gain.exponentialRampToValueAtTime(.001,t+d);o.start(t);o.stop(t+d)}}catch(e){}}
-var TONE={C:[880,.12,1],K:[660,.12,2],E:[1180,.12,1],D:[330,.2,1],X:[330,.2,2],ERR:[200,.45,2],BOX:[990,.1,3]};
+var TONE={U:[740,.1,3],C:[880,.12,1],K:[660,.12,2],E:[1180,.12,1],D:[330,.2,1],X:[330,.2,2],ERR:[200,.45,2],BOX:[990,.1,3]};
 function tone(k){beep.apply(null,TONE[k])}
 function flash(cls,dest,t,c,extra){var html='<div class="dest">'+esc(dest)+'</div>'+(t?'<div class="t">'+esc(t)+'</div>':'')+(c?'<div class="c">'+c+'</div>':'')+(extra||'');
   var f=$('flash');f.className='flash f-'+cls;f.innerHTML=html;
@@ -80,13 +81,14 @@ var TOQUE=window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
 function focusTit(){if(camAberta||TOQUE)return;$('inTit').focus()}
 
 function counts(){
-  var r={sC:0,sE:0,sD:0,lC:0,lE:0,lD:0};
-  for(var k in LID){var v=LID[k],t=k.split('|')[0];if(t==='solto'){r.lC+=v.C;r.lE+=v.E;r.lD+=v.D}else{r.sC+=v.C+v.K;r.sE+=v.E;r.sD+=v.D+v.X}}
+  var r={sC:0,sE:0,sD:0,lC:0,lE:0,lD:0,U:0};
+  for(var k in LID){var v=LID[k],t=k.split('|')[0];if(t==='solto'){r.lC+=v.C;r.lE+=v.E;r.lD+=v.D;r.U+=v.U||0}else{r.sC+=v.C+v.K;r.sE+=v.E;r.sD+=v.D+v.X}}
   r.C=r.sC+r.lC;r.E=r.sE+r.lE;r.D=r.sD+r.lD;return r}
 function renderCounters(){
-  var c=counts(),EVK={cbp:'CBP',cbtbe:'CBTBE',dev:'DEV'};
+  var c=counts(),EVK={cbp:'CBP',cbtbe:'CBTBE',urg:'URG',dev:'DEV'};
   var defs=[['CBP','cbp',c.C,TOT.C+NEED.CBP,'Sobra '+fmt(c.sC)+'/'+fmt(TOT.C)+' · soltos '+fmt(c.lC)+'/'+fmt(NEED.CBP)],
             ['CBTBE','cbtbe',c.E,TOT.E+NEED.CBTBE,'Sobra '+fmt(c.sE)+'/'+fmt(TOT.E)+' · soltos '+fmt(c.lE)+'/'+fmt(NEED.CBTBE)],
+            ['URGÊNCIA DEV','urg',c.U,NEED.URG,'Livros soltos · '+fmt(c.U)+'/'+fmt(NEED.URG)],
             ['DEVOLUÇÃO POA','dev',c.D,TOT.D+NEED.DEV,'Sobra '+fmt(c.sD)+'/'+fmt(TOT.D)+' · soltos '+fmt(c.lD)+'/'+fmt(NEED.DEV)]];
   $('counters').innerHTML=defs.map(function(d){var f=Math.max(0,d[3]-d[2]),ev=EVK[d[1]];
     return '<div class="ctr c-'+d[1]+(sel===ev?' sel':'')+'" role="button" tabindex="0" data-ev="'+ev+'"><div class="l">'+d[0]+'</div><div class="v">'+fmt(d[2])+' <small>/ '+fmt(d[3])+'</small></div><div class="s">'+(f?'Faltam '+fmt(f)+' un':'Completo')+' · '+d[4]+'</div><div class="bar"><i style="width:'+(d[3]?Math.min(100,100*d[2]/d[3]):0).toFixed(1)+'%"></i></div><div class="tap">'+(sel===ev?'▲ Lista aberta abaixo':'▼ Toque para ver os títulos')+'</div></div>'}).join('');
@@ -118,16 +120,16 @@ function renderBox(){
   bb.innerHTML=h+'</tbody></table></div>';
 }
 function pendRows(ev){
-  var map={},key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:['D','X'];
+  var map={},key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:ev==='URG'?[]:['D','X'];
   function add(i,o,p,l){var m=map[i]||(map[i]={i:i,prev:0,lido:0,o:{}});m.prev+=p;m.lido+=l;m.o[o]=1}
   BOXES.forEach(function(b){b.it.forEach(function(r){var pl=plan(r),x=boxItemRead(b.id,r[0]),p=0,l=0;key.forEach(function(k){p+=pl[k]||0;l+=x[k]||0});if(p||l)add(r[0],(function(s){return s==='Aberta'||s==='Avulso'})(sitFis(b.id,r[2]))?'separação':'caixa fechada',p,l)})});
-  var sk=ev==='CBP'?'C':ev==='CBTBE'?'E':'D';
-  Object.keys(PED).forEach(function(i){var n=need(i,ev),g=solto(i)[sk];if(n||g)add(i,'soltos',n,g)});
+  var sk=SK(ev);
+  Object.keys(PED).forEach(function(i){var n=need(i,ev),g=solto(i)[sk]||0;if(n||g)add(i,'soltos',n,g)});
   Object.keys(LID).forEach(function(k){var p=k.split('|');if(p[0]==='solto'&&!PED[p[2]]&&LID[k][sk])add(p[2],'soltos fora do plano',0,LID[k][sk])});
   return Object.keys(map).map(function(k){return map[k]});
 }
 function ondeAchar(i,ev){
-  var out=[],key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:['D'];
+  var out=[],key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:ev==='URG'?[]:['D'];
   (BYISBN[i]||[]).forEach(function(x){var b=BOX[x.box],s=boxItemRead(x.box,i),pl=plan(x.r),f=0;key.forEach(function(k){f+=Math.max(0,(pl[k]||0)-(s[k]||0))});
     var sf=sitFis(x.box,x.r[2]);if(f)out.push('<span class="pill p-'+(sf==='Aberta'||sf==='Avulso'?'abrir':'dev')+'">'+(x.box==='S/Caixa'?'Avulsos':'Cx '+esc(x.box))+' · NF '+x.r[2]+' · '+f+'</span>')});
   if(falta(i,ev))out.push('<span class="pill" style="background:var(--bg-card-2);color:var(--text)">Estoque (solto) · '+falta(i,ev)+'</span>');
@@ -137,7 +139,7 @@ function renderPend(){
   var box=$('lista');if(!sel){box.classList.add('hidden');return}box.classList.remove('hidden');
   var ev=sel,st=$('pSt').value,q=$('pQ').value.trim().toUpperCase(),all=pendRows(ev),tp=0,tl=0,nf=0;
   all.forEach(function(r){tp+=r.prev;tl+=Math.min(r.lido,r.prev);if(r.prev>r.lido)nf++});
-  $('lstTitle').textContent='Títulos do pedido '+(ev==='DEV'?'Devolução POA':ev);
+  $('lstTitle').textContent='Títulos do pedido '+(ev==='DEV'?'Devolução POA':ev==='URG'?'Urgência de devolução':ev);
   $('lstSum').textContent=all.length+' títulos · '+nf+' com unidades faltando · lido '+fmt(tl)+' de '+fmt(tp)+' previstas';
   var rows=all.filter(function(r){var f=r.prev>r.lido;return (st==='all'||(st==='falta'&&f)||(st==='ok'&&!f))&&(!q||r.i.indexOf(q)>=0||tituloDe(r.i).toUpperCase().indexOf(q)>=0)});
   rows.sort(function(a,b){return (b.prev-b.lido)-(a.prev-a.lido)||tituloDe(a.i).localeCompare(tituloDe(b.i))});
@@ -183,7 +185,7 @@ function lerCaixa(){
 
 /* ---------- título ---------- */
 function qtdAtual(){var q=parseInt($('inQtd').value,10);return isFinite(q)&&q>0?Math.min(q,999):1}
-function partesTxt(p){var o=[];[['C','CBP'],['K','CBP compl.'],['E','CBTBE'],['D','DEVOLUÇÃO POA'],['X','excedente (devolução)']].forEach(function(x){if(p&&p[x[0]])o.push(x[1]+' '+p[x[0]])});return o}
+function partesTxt(p){var o=[];[['C','CBP'],['K','CBP compl.'],['E','CBTBE'],['U','URGÊNCIA DEV'],['D','DEVOLUÇÃO POA'],['X','excedente (devolução)']].forEach(function(x){if(p&&p[x[0]])o.push(x[1]+' '+p[x[0]])});return o}
 function lerTitulo(raw,qtdForcada){
   var i=(raw||'').replace(/[^0-9Xx]/g,'').toUpperCase();if(!i)return;
   var q=qtdForcada||qtdAtual();$('inQtd').value=1;
@@ -209,13 +211,14 @@ function lerTitulo(raw,qtdForcada){
       if(d.lido_caixa>=d.total_caixa){c+=' <strong>Caixa '+cx+' · NF '+cn+' concluída.</strong>';if(cur===cx&&curNota===cn){cur=null;curNota=null}}
       flash(DCLS[k],k==='K'?'CBP · COMPLEMENTO':DEST[k],d.descricao||tituloDe(i),c);tone(k);render();agendarRefresh();return}
     var s=await rpc('sep_bipar_solto',{p_isbn:i,p_prioridade:$('prio').value,p_qtd:q});
-    var ps=s.partes||{};if(!s.partes)ps[s.destino]=1;['C','E','D'].forEach(function(z){if(ps[z])addLid('solto','',i,z,ps[z])});
+    var ps=s.partes||{};if(!s.partes)ps[s.destino]=1;['C','E','U','D'].forEach(function(z){if(ps[z])addLid('solto','',i,z,ps[z])});
     var nm=s.titulo||tituloDe(i);
     if(q>1){var ls=partesTxt(ps),dv2=s.dev||{};
-      var cls2=ls.length>1?'abrir':ps.C?'cbp':ps.E?'cbtbe':'dev',big=ls.length>1?'DIVIDIR '+q+' UN':(ps.C?'CBP':ps.E?'CBTBE':'DEVOLUÇÃO POA')+' · '+q+' UN';
+      var cls2=ls.length>1?'abrir':ps.C?'cbp':ps.E?'cbtbe':ps.U?'urg':'dev',big=ls.length>1?'DIVIDIR '+q+' UN':(ps.C?'CBP':ps.E?'CBTBE':ps.U?'URGÊNCIA DEV':'DEVOLUÇÃO POA')+' · '+q+' UN';
       var extra2=(ps.D&&dv2.soltos>dv2.precisa)?' Atenção: a devolução deste título passou do previsto ('+dv2.soltos+' de '+dv2.precisa+'). Confira a quantidade.':'';
-      flash(cls2,big,nm,'Livro solto: separe <strong>'+ls.join(' · ')+'</strong>.'+extra2);tone(ls.length>1?'BOX':ps.C?'C':ps.E?'E':'D');render();agendarRefresh();return}
-    if(s.destino==='D'){var dv=s.dev||{},fd=Math.max(0,(dv.precisa||0)-(dv.soltos||0));flash('dev','DEVOLUÇÃO POA',nm,!s.no_pedido?'Este título não está no plano. Separe para devolução e avise o responsável.':(dv.soltos<=dv.precisa?'Livro solto: unidade '+dv.soltos+' de '+dv.precisa+' da devolução POA.'+(fd?' Faltam '+fd+'.':' Devolução deste título completa.'):'CBP, CBTBE e devolução previstos já completos: esta unidade passa do estoque previsto. Avise o responsável.'));tone('D')}
+      flash(cls2,big,nm,'Livro solto: separe <strong>'+ls.join(' · ')+'</strong>.'+extra2);tone(ls.length>1?'BOX':ps.C?'C':ps.E?'E':ps.U?'U':'D');render();agendarRefresh();return}
+    if(s.destino==='U'){var ug=s.urg||{},fu=Math.max(0,(ug.precisa||0)-(ug.soltos||0));flash('urg','URGÊNCIA DEV',nm,'Urgência de devolução: unidade '+ug.soltos+' de '+ug.precisa+'.'+(fu?' Faltam '+fu+'.':' Urgência deste título completa.'));tone('U')}
+    else if(s.destino==='D'){var dv=s.dev||{},fd=Math.max(0,(dv.precisa||0)-(dv.soltos||0));flash('dev','DEVOLUÇÃO POA',nm,!s.no_pedido?'Este título não está no plano. Separe para devolução e avise o responsável.':(dv.soltos<=dv.precisa?'Livro solto: unidade '+dv.soltos+' de '+dv.precisa+' da devolução POA.'+(fd?' Faltam '+fd+'.':' Devolução deste título completa.'):'CBP, CBTBE e devolução previstos já completos: esta unidade passa do estoque previsto. Avise o responsável.'));tone('D')}
     else{var ev=s.destino==='C'?'CBP':'CBTBE',me=s.destino==='C'?s.cbp:s.cbtbe,ot=s.destino==='C'?s.cbtbe:s.cbp,o=s.destino==='C'?'CBTBE':'CBP';
       var fm=Math.max(0,me.precisa-me.soltos),fo=Math.max(0,ot.precisa-ot.soltos);
       flash(s.destino==='C'?'cbp':'cbtbe',ev,nm,'Livro solto: unidade '+me.soltos+' de '+me.precisa+' que faltam no '+ev+'.'+(fm?' Faltam '+fm+'.':' '+ev+' completo neste título.')+(fo?' '+o+' ainda precisa de '+fo+'.':''));tone(s.destino)}
@@ -315,7 +318,7 @@ $('pSt').addEventListener('change',renderPend);$('pQ').addEventListener('input',
 $('prio').value=lsGet('prio','CBP');$('prio').addEventListener('change',function(){lsSet('prio',this.value)});
 $('btnCsv').addEventListener('click',function(){
   var L=['Destino;ISBN;Titulo;Previsto;Lido;Falta;Origem'];
-  ['CBP','CBTBE','DEV'].forEach(function(ev){pendRows(ev).forEach(function(r){L.push([ev==='DEV'?'DEVOLUCAO':ev,r.i,'"'+tituloDe(r.i).replace(/"/g,'""')+'"',r.prev,r.lido,Math.max(0,r.prev-r.lido),Object.keys(r.o).join('+')].join(';'))})});
+  ['CBP','CBTBE','URG','DEV'].forEach(function(ev){pendRows(ev).forEach(function(r){L.push([ev==='DEV'?'DEVOLUCAO':ev==='URG'?'URGENCIA_DEV':ev,r.i,'"'+tituloDe(r.i).replace(/"/g,'""')+'"',r.prev,r.lido,Math.max(0,r.prev-r.lido),Object.keys(r.o).join('+')].join(';'))})});
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+L.join('\n')],{type:'text/csv;charset=utf-8'}));a.download='separacao_CBP_CBTBE_devolucao.csv';document.body.appendChild(a);a.click();a.remove();
 });
 

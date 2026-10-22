@@ -60,7 +60,7 @@ h1{font-size:clamp(20px,2.6vw,26px);font-weight:700;letter-spacing:-.02em}
 .sync{display:inline-flex;align-items:center;padding:3px 9px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.08em;border:1px solid var(--border-strong);color:var(--text-muted)}
 .sync.ok{color:var(--cbtbe);border-color:var(--cbtbe)}.sync.local{color:var(--comp);border-color:var(--comp)}.sync.err{color:var(--red);border-color:var(--red)}
 /* contadores */
-.counters{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.counters{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
 .ctr{border-radius:12px;padding:14px 16px;border:2px solid;cursor:pointer;transition:transform .1s,box-shadow .1s}
 .ctr:hover{transform:translateY(-1px)}
 .ctr.sel{box-shadow:0 0 0 3px var(--bg),0 0 0 6px currentColor}
@@ -176,7 +176,7 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
   .top{margin-bottom:8px}
   .top h1{font-size:16px;line-height:1.2}
   #quem{display:none}
-  .counters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:6px 0;grid-template-columns:repeat(3,1fr);gap:6px}
+  .counters{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:6px 0;grid-template-columns:repeat(4,1fr);gap:5px}
   .ctr{padding:8px 8px;border-width:2px}
   .ctr .l{font-size:10px;letter-spacing:.03em}
   .ctr .v{font-size:19px}
@@ -204,6 +204,12 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
   details summary{padding:10px 12px}
   .lst-head .btn{padding:6px 10px}
 }
+.c-urg{background:rgba(217,48,37,.10);border-color:#d93025;color:#d93025}
+.f-urg{background:rgba(217,48,37,.12);border-color:#d93025;color:#d93025}
+.p-urg{background:rgba(217,48,37,.14);color:#d93025}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .c-urg,:root:not([data-theme="light"]) .f-urg{color:#f28b82;border-color:#f28b82;background:rgba(242,139,130,.14)}}
+.cam-res.f-urg{background:#5c1612;border-color:#f28b82;color:#ffd2cc}
+@media (max-width:640px){.ctr{padding:7px 6px}.ctr .l{font-size:9px}.ctr .v{font-size:17px}}
 </style>
 </head>
 <body>
@@ -286,7 +292,7 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
   <div class="cam-bottom"><span id="camEstado" class="cam-estado">Iniciando câmera…</span><button type="button" class="btn sm warn" id="camUndo">↶ Reverter última</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-<script src="config.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="config.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
