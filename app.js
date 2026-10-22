@@ -42,6 +42,12 @@ function lidKey(t,c,i){return t+'|'+(c||'')+'|'+i}
 function addLid(t,c,i,d,q){var k=lidKey(t,c,i),v=LID[k]||(LID[k]={C:0,K:0,E:0,D:0,X:0});v[d]+=q}
 function boxItemRead(c,i){var a=LID[lidKey('caixa',c,i)],b=LID[lidKey('item',c,i)],o={C:0,K:0,E:0,D:0,X:0};[a,b].forEach(function(v){if(v)for(var k in o)o[k]+=v[k]});return o}
 function boxRead(c){var b=BOX[c],t=0;if(!b)return 0;b.it.forEach(function(r){var x=boxItemRead(c,r[0]);t+=x.C+x.K+x.E+x.D});return t}
+// caixa física = número da caixa + nota fiscal
+function itensFis(c,n){var b=BOX[c];return b?b.it.filter(function(r){return r[2]===n}):[]}
+function unidFis(c,n){return itensFis(c,n).reduce(function(a,r){return a+r[3]},0)}
+function lidoFis(c,n){return itensFis(c,n).reduce(function(a,r){var x=boxItemRead(c,r[0]);return a+x.C+x.K+x.E+x.D},0)}
+function sitFis(c,n){if(c==='S/Caixa')return 'Avulso';var it=itensFis(c,n),t=0,C=0,E=0,D=0;it.forEach(function(r){t+=r[3];C+=r[4];E+=r[5];D+=r[6]});
+  if(!t)return null;return C===t?'Inteira CBP':E===t?'Inteira CBTBE':D===t?'Devolução fechada':'Aberta'}
 function solto(i){return LID[lidKey('solto','',i)]||{C:0,K:0,E:0,D:0,X:0}}
 function falta(i,ev){return Math.max(0,need(i,ev)-solto(i)[ev==='CBP'?'C':ev==='CBTBE'?'E':'D'])}
 var versaoBanco=null;
@@ -58,7 +64,7 @@ var refreshT=null;
 function agendarRefresh(ms){clearTimeout(refreshT);refreshT=setTimeout(async function(){try{await carregarEstado();setSync('ok','SINCRONIZADO');render()}catch(e){if(!sessaoCaiu(e))setSync('err','SEM CONEXÃO')}},ms||600)}
 
 /* ---------- interface ---------- */
-var cur=null,sel=null,armed=null,armT=null,nome=lsGet('nome','');
+var cur=null,curNota=null,sel=null,armed=null,armT=null,nome=lsGet('nome','');
 function setSync(c,t){var el=$('sync');el.className='sync '+c;el.textContent=t}
 var actx=null;
 function audioAtivar(){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume();
@@ -96,12 +102,12 @@ function renderHist(){
 function renderBox(){
   var ctx=$('ctx'),bt=$('boxTitle'),bb=$('boxBody');
   if(!cur){ctx.innerHTML='';bt.textContent='Caixa ativa';bb.className='muted';bb.style.fontSize='13px';bb.innerHTML='Nenhuma caixa aberta ativa. Caixas fechadas são registradas de uma vez ao serem lidas; títulos bipados sem caixa ativa são livros soltos.';return}
-  var b=BOX[cur],t=boxRead(cur);
-  ctx.innerHTML='<div class="ctx"><span>Caixa ativa: <b class="mono">'+esc(cur)+'</b> · notas '+b.notas.join(', ')+' · conferidas <b>'+fmt(t)+'/'+fmt(b.units)+'</b></span><button class="btn sm" id="btnFecharCx">Fechar caixa ativa</button></div>';
-  $('btnFecharCx').onclick=function(){cur=null;flash('dev','CAIXA FECHADA','','Próximos títulos bipados serão tratados como livros soltos.');render();focusTit()};
-  bt.textContent='Caixa '+cur+' · '+b.sit;bb.className='';bb.style.fontSize='';
+  var b=BOX[cur],t=lidoFis(cur,curNota),un=unidFis(cur,curNota);
+  ctx.innerHTML='<div class="ctx"><span>Caixa ativa: <b class="mono">'+esc(cur)+'</b> · NF <b class="mono">'+curNota+'</b> · conferidas <b>'+fmt(t)+'/'+fmt(un)+'</b></span><button class="btn sm" id="btnFecharCx">Fechar caixa ativa</button></div>';
+  $('btnFecharCx').onclick=function(){cur=null;curNota=null;flash('dev','CAIXA FECHADA','','Próximos títulos bipados serão tratados como livros soltos.');render();focusTit()};
+  bt.textContent='Caixa '+cur+' · NF '+curNota+' · '+sitFis(cur,curNota);bb.className='';bb.style.fontSize='';
   var h='<div class="tbl-wrap"><table><thead><tr><th>Título</th><th>Previsto</th><th class="n">Lido</th></tr></thead><tbody>';
-  b.it.forEach(function(r){var pl=plan(r),x=boxItemRead(cur,r[0]),ds=[],n=x.C+x.K+x.E+x.D;
+  itensFis(cur,curNota).forEach(function(r){var pl=plan(r),x=boxItemRead(cur,r[0]),ds=[],n=x.C+x.K+x.E+x.D;
     if(pl.C)ds.push('<span class="pill p-cbp">CBP '+x.C+'/'+pl.C+'</span>');if(pl.K)ds.push('<span class="pill p-comp">CBP compl. '+x.K+'/'+pl.K+'</span>');
     if(pl.E)ds.push('<span class="pill p-cbtbe">CBTBE '+x.E+'/'+pl.E+'</span>');if(pl.D)ds.push('<span class="pill p-dev">DEV '+x.D+'/'+pl.D+'</span>');if(x.X)ds.push('<span class="pill p-err">+'+x.X+' exced.</span>');
     h+='<tr class="'+(n>=r[3]?'done':'')+'"><td>'+esc(r[1])+'<div class="mono muted" style="font-size:11px">'+r[0]+'</div></td><td>'+ds.join(' ')+'</td><td class="n">'+n+'/'+r[3]+'</td></tr>'});
@@ -110,7 +116,7 @@ function renderBox(){
 function pendRows(ev){
   var map={},key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:['D','X'];
   function add(i,o,p,l){var m=map[i]||(map[i]={i:i,prev:0,lido:0,o:{}});m.prev+=p;m.lido+=l;m.o[o]=1}
-  BOXES.forEach(function(b){b.it.forEach(function(r){var pl=plan(r),x=boxItemRead(b.id,r[0]),p=0,l=0;key.forEach(function(k){p+=pl[k]||0;l+=x[k]||0});if(p||l)add(r[0],b.sit==='Aberta'||b.sit==='Avulso'?'separação':'caixa fechada',p,l)})});
+  BOXES.forEach(function(b){b.it.forEach(function(r){var pl=plan(r),x=boxItemRead(b.id,r[0]),p=0,l=0;key.forEach(function(k){p+=pl[k]||0;l+=x[k]||0});if(p||l)add(r[0],(function(s){return s==='Aberta'||s==='Avulso'})(sitFis(b.id,r[2]))?'separação':'caixa fechada',p,l)})});
   var sk=ev==='CBP'?'C':ev==='CBTBE'?'E':'D';
   Object.keys(PED).forEach(function(i){var n=need(i,ev),g=solto(i)[sk];if(n||g)add(i,'soltos',n,g)});
   Object.keys(LID).forEach(function(k){var p=k.split('|');if(p[0]==='solto'&&!PED[p[2]]&&LID[k][sk])add(p[2],'soltos fora do plano',0,LID[k][sk])});
@@ -119,7 +125,7 @@ function pendRows(ev){
 function ondeAchar(i,ev){
   var out=[],key=ev==='CBP'?['C','K']:ev==='CBTBE'?['E']:['D'];
   (BYISBN[i]||[]).forEach(function(x){var b=BOX[x.box],s=boxItemRead(x.box,i),pl=plan(x.r),f=0;key.forEach(function(k){f+=Math.max(0,(pl[k]||0)-(s[k]||0))});
-    if(f)out.push('<span class="pill p-'+(b.sit==='Aberta'||b.sit==='Avulso'?'abrir':'dev')+'">'+(x.box==='S/Caixa'?'Avulsos':'Cx '+esc(x.box))+' · NF '+x.r[2]+' · '+f+'</span>')});
+    var sf=sitFis(x.box,x.r[2]);if(f)out.push('<span class="pill p-'+(sf==='Aberta'||sf==='Avulso'?'abrir':'dev')+'">'+(x.box==='S/Caixa'?'Avulsos':'Cx '+esc(x.box))+' · NF '+x.r[2]+' · '+f+'</span>')});
   if(falta(i,ev))out.push('<span class="pill" style="background:var(--bg-card-2);color:var(--text)">Estoque (solto) · '+falta(i,ev)+'</span>');
   return out.join(' ');
 }
@@ -153,18 +159,20 @@ function lerCaixa(){
   if(!cx){cxEl.focus();return}
   var b=BOX[cx];
   if(!b){flash('err','CAIXA NÃO ENCONTRADA',cx,'Esta caixa não está na sobra do Experience. Confira o número.');tone('ERR');return}
-  if(!nota&&cx!=='S/Caixa'){flash('err','INFORME A NOTA','Caixa '+cx,'Notas desta caixa: '+b.notas.join(', ')+'.');notaEl.focus();tone('ERR');return}
+  if(!nota&&cx==='S/Caixa')nota=String(b.notas[0]);
+  if(!nota){flash('err','INFORME A NOTA','Caixa '+cx,'Notas desta caixa: '+b.notas.join(', ')+'.');notaEl.focus();tone('ERR');return}
   if(nota&&b.notas.indexOf(+nota)<0){flash('err','NOTA NÃO CONFERE','Caixa '+cx+' · nota '+nota,'Notas desta caixa: '+b.notas.join(', ')+'. Confira antes de separar.');tone('ERR');return}
   cxEl.value='';notaEl.value='';
   enfileirar(async function(){
-    var d=await rpc('sep_ler_caixa',{p_caixa:cx});
-    if(d.status==='abrir'){cur=cx;flash('abrir',b.sit==='Avulso'?'AVULSOS: BIPAR UM A UM':'ABRIR A CAIXA','Caixa '+cx+' · '+fmt(b.units)+' un','Bipe cada livro desta caixa para saber o destino. Conferidas: '+fmt(boxRead(cx))+'/'+fmt(b.units)+'.');tone('BOX');render();focusTit();return}
-    var ev=b.sit==='Inteira CBP'?'C':b.sit==='Inteira CBTBE'?'E':'D',dest=DEST[ev],cls=DCLS[ev];
-    if(d.status==='ja_lida'){flash(cls,dest,'Caixa '+cx+' já foi lida','Destino: '+dest+'. Não registrei de novo. Se foi engano, reverta pelo histórico.');tone('ERR');return}
-    if(d.status==='nao_encontrada'){flash('err','CAIXA NÃO ENCONTRADA',cx,'');tone('ERR');return}
-    b.it.forEach(function(r){var pl=plan(r);BK.forEach(function(k){if(pl[k])addLid('caixa',cx,r[0],k,pl[k])})});
-    var comp=b.it.filter(function(r){return r[7]>0});
-    flash(cls,dest,'Caixa '+cx+(ev==='D'?' · não abrir: volta para o estoque':' · enviar fechada'),fmt(d.qtd)+' un registradas em '+dest+'.',comp.length?'<div class="compnote"><strong>Contém complemento do CBP:</strong> '+comp.map(function(r){return esc(r[1])+' ('+r[7]+' un)'}).join('; ')+'</div>':'');
+    var nf=+nota,its=itensFis(cx,nf),un=unidFis(cx,nf);
+    var d=await rpc('sep_ler_caixa',{p_caixa:cx,p_nota:nf});
+    if(d.status==='abrir'){cur=cx;curNota=nf;flash('abrir',d.situacao==='Avulso'?'AVULSOS: BIPAR UM A UM':'ABRIR A CAIXA','Caixa '+cx+' · NF '+nf+' · '+fmt(un)+' un','Bipe cada livro desta caixa para saber o destino. Conferidas: '+fmt(lidoFis(cx,nf))+'/'+fmt(un)+'.');tone('BOX');render();focusTit();return}
+    if(d.status==='nao_encontrada'){flash('err','CAIXA NÃO ENCONTRADA',cx+' · NF '+nf,'');tone('ERR');return}
+    var ev=d.situacao==='Inteira CBP'?'C':d.situacao==='Inteira CBTBE'?'E':'D',dest=DEST[ev],cls=DCLS[ev];
+    if(d.status==='ja_lida'){flash(cls,dest,'Caixa '+cx+' · NF '+nf+' já foi lida','Destino: '+dest+'. Não registrei de novo. Se foi engano, reverta pelo histórico.');tone('ERR');return}
+    its.forEach(function(r){var pl=plan(r);BK.forEach(function(k){if(pl[k])addLid('caixa',cx,r[0],k,pl[k])})});
+    var comp=its.filter(function(r){return r[7]>0});
+    flash(cls,dest,'Caixa '+cx+' · NF '+nf+(ev==='D'?' · não abrir: volta para o estoque':' · enviar fechada'),fmt(d.qtd)+' un registradas em '+dest+'.',comp.length?'<div class="compnote"><strong>Contém complemento do CBP:</strong> '+comp.map(function(r){return esc(r[1])+' ('+r[7]+' un)'}).join('; ')+'</div>':'');
     tone(ev);render();agendarRefresh();focusTit();
   });
 }
@@ -173,17 +181,17 @@ function lerCaixa(){
 function lerTitulo(raw){
   var i=(raw||'').replace(/[^0-9Xx]/g,'').toUpperCase();if(!i)return;
   if(!PED[i]&&!BYISBN[i]&&ALIAS[i])i=ALIAS[i];
-  var cx=cur;
+  var cx=cur,cn=curNota;
   enfileirar(async function(){
     if(cx){
       var b=BOX[cx];
-      var d=await rpc('sep_bipar_item',{p_caixa:cx,p_isbn:i});
-      if(d.status==='nao_pertence'){var where=(BYISBN[i]||[]).map(function(x){return x.box});
-        flash('err','NÃO É DESTA CAIXA',tituloDe(i),'Caixa ativa: '+cx+'. '+(where.length?'Este título está nas caixas '+where.slice(0,8).join(', ')+'.':'Este título não está na sobra.')+' Se for um livro solto, feche a caixa ativa e bipe de novo.');tone('ERR');return}
+      var d=await rpc('sep_bipar_item',{p_caixa:cx,p_isbn:i,p_nota:cn});
+      if(d.status==='nao_pertence'){var where=(BYISBN[i]||[]).map(function(x){return x.box+' (NF '+x.r[2]+')'});
+        flash('err','NÃO É DESTA CAIXA',tituloDe(i),'Caixa ativa: '+cx+' · NF '+cn+'. '+(where.length?'Este título está nas caixas '+where.slice(0,8).join(', ')+'.':'Este título não está na sobra.')+' Se for um livro solto, feche a caixa ativa e bipe de novo.');tone('ERR');return}
       var k=d.destino;addLid('item',cx,i,k,1);
       var c=k==='X'?'Unidade a mais do que o previsto nesta caixa (excedente): separar para devolução.':k==='K'?'Complemento do pedido CBP: unidade '+d.n+' de '+d.previsto+'.':'Unidade '+d.n+' de '+d.previsto+' deste título para '+DEST[k]+'.';
       if(d.faltam_titulo>0)c+=' Faltam '+d.faltam_titulo+' un deste título na caixa.';
-      if(d.lido_caixa>=d.total_caixa){c+=' <strong>Caixa '+cx+' concluída.</strong>';if(cur===cx)cur=null}
+      if(d.lido_caixa>=d.total_caixa){c+=' <strong>Caixa '+cx+' · NF '+cn+' concluída.</strong>';if(cur===cx&&curNota===cn){cur=null;curNota=null}}
       flash(DCLS[k],k==='K'?'CBP · COMPLEMENTO':DEST[k],d.descricao||tituloDe(i),c);tone(k);render();agendarRefresh();return}
     var s=await rpc('sep_bipar_solto',{p_isbn:i,p_prioridade:$('prio').value});
     addLid('solto','',i,s.destino,1);
@@ -202,7 +210,7 @@ var camAberta=false,leitor=null,camPronto=true,camVisto=0,camLido=0,camTimer=nul
 var CAM_LIB='https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
 function carregarLib(){return new Promise(function(ok,erro){if(window.Html5Qrcode)return ok();var sc=document.createElement('script');sc.src=CAM_LIB;sc.onload=function(){ok()};sc.onerror=function(){erro(new Error('Não foi possível carregar o leitor da câmera.'))};document.head.appendChild(sc)})}
 function camEstado(txt,pronto){var e=$('camEstado');e.textContent=txt;e.className='cam-estado'+(pronto?' pronto':'')}
-function camCtx(){$('camCtx').textContent=cur?('Caixa ativa '+cur+' · '+(BOX[cur]?BOX[cur].sit:'')):'Livros soltos (sem caixa ativa)'}
+function camCtx(){$('camCtx').textContent=cur?('Caixa ativa '+cur+' · NF '+curNota+' · '+(sitFis(cur,curNota)||'')):'Livros soltos (sem caixa ativa)'}
 async function abrirCamera(){
   audioAtivar();
   if(camAberta)return;
