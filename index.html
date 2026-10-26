@@ -241,9 +241,10 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
       <form id="fNota" class="hidden-form"></form><form id="fCaixa" class="hidden-form"></form><form id="fTit" class="hidden-form"></form><form id="fQtd" class="hidden-form"></form>
       <label class="f">Nota<input id="inNota" form="fNota" class="in-nota mono" type="text" inputmode="numeric" enterkeyhint="next" autocomplete="off" placeholder="476061"></label>
       <div class="f"><label for="inCaixa">Nº da caixa</label><div class="tit-row"><input id="inCaixa" form="fCaixa" class="in-caixa mono" type="text" inputmode="numeric" enterkeyhint="search" autocomplete="off" placeholder="0007"><button type="submit" form="fCaixa" class="btn primary btn-ler" id="btnLerCaixa">Ler</button></div></div>
-      <div class="f tit"><div class="tit-head"><label for="inTit">Bipar título (ISBN)</label><label class="modo-qtd"><input type="checkbox" id="modoQtd"> Bipar 1 e digitar a quantidade</label></div><div class="tit-row"><input id="inTit" form="fTit" class="mono" type="text" inputmode="numeric" enterkeyhint="go" autocomplete="off" placeholder="aguardando leitura…"><input id="inQtd" form="fQtd" enterkeyhint="go" class="mono qtd" type="number" inputmode="numeric" min="1" max="999" value="1" aria-label="Quantidade" title="Quantidade"><button type="button" class="btn cam-btn" id="btnCam" aria-label="Ler com a câmera">📷<span> Câmera</span></button></div></div>
+      <div class="f tit"><div class="tit-head"><label for="inTit">Bipar título (ISBN)</label><label class="modo-qtd"><input type="checkbox" id="modoQtd"> Bipar 1 e digitar a quantidade</label><label class="modo-qtd" style="color:var(--red)"><input type="checkbox" id="daDev"> Tirado da pilha de devolução</label></div><div class="tit-row"><input id="inTit" form="fTit" class="mono" type="text" inputmode="numeric" enterkeyhint="go" autocomplete="off" placeholder="aguardando leitura…"><input id="inQtd" form="fQtd" enterkeyhint="go" class="mono qtd" type="number" inputmode="numeric" min="1" max="999" value="1" aria-label="Quantidade" title="Quantidade"><button type="button" class="btn cam-btn" id="btnCam" aria-label="Ler com a câmera">📷<span> Câmera</span></button></div></div>
     </div>
-    <p class="hint">Caixa: digite a nota e o número e tecle Enter (7 vira 0007; “S” para os avulsos sem caixa). Título: bipe o ISBN. Com uma caixa aberta ativa, o título é separado conforme essa caixa; sem caixa ativa, é tratado como livro solto do estoque.</p>
+    <p class="hint">Caixa: digite a nota e o número e toque em Ler. Cada título da caixa vai para o pedido que ainda falta (CBP ou CBTBE, o que falta mais), depois urgência; o resto é devolução. Título: bipe o ISBN — vale para livro solto, avulso ou tirado de caixa.</p>
+    <div id="daDevAviso" class="pendente hidden" style="background:var(--red-soft);border-color:var(--red)"><strong>Modo “tirado da devolução” ligado:</strong> cada livro bipado sai da Devolução e vai para o pedido que falta. Desligue ao voltar a bipar livros normais.</div>
     <div id="pend1"></div>
     <div id="ctx"></div>
   </div>
@@ -296,7 +297,7 @@ input[type=password]{font:inherit;font-size:20px;padding:10px 12px;border-radius
   <div class="cam-bottom"><span id="camEstado" class="cam-estado">Iniciando câmera…</span><button type="button" class="btn sm warn" id="camUndo">↶ Reverter última</button></div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
-<script src="config.js?v=12"></script>
-<script src="app.js?v=12"></script>
+<script src="config.js?v=13"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

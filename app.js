@@ -170,16 +170,20 @@ function lerCaixa(){
   if(nota&&b.notas.indexOf(+nota)<0){flash('err','NOTA NÃO CONFERE','Caixa '+cx+' · nota '+nota,'Notas desta caixa: '+b.notas.join(', ')+'. Confira antes de separar.');tone('ERR');return}
   cxEl.value='';notaEl.value='';
   enfileirar(async function(){
-    var nf=+nota,its=itensFis(cx,nf),un=unidFis(cx,nf);
-    var d=await rpc('sep_ler_caixa',{p_caixa:cx,p_nota:nf});
-    if(d.status==='abrir'){cur=cx;curNota=nf;flash('abrir',d.situacao==='Avulso'?'AVULSOS: BIPAR UM A UM':'ABRIR A CAIXA','Caixa '+cx+' · NF '+nf+' · '+fmt(un)+' un','Bipe cada livro desta caixa para saber o destino. Conferidas: '+fmt(lidoFis(cx,nf))+'/'+fmt(un)+'.');tone('BOX');render();focusTit();return}
+    var nf=+nota;
+    var d=await rpc('sep_ler_caixa_falta',{p_caixa:cx,p_nota:nf});
+    if(d.status==='avulsos'){flash('abrir','AVULSOS','Caixa S/Caixa','Os avulsos são livros soltos: bipe cada título (ou bipe 1 e digite a quantidade).');tone('BOX');focusTit();return}
     if(d.status==='nao_encontrada'){flash('err','CAIXA NÃO ENCONTRADA',cx+' · NF '+nf,'');tone('ERR');return}
-    var ev=d.situacao==='Inteira CBP'?'C':d.situacao==='Inteira CBTBE'?'E':'D',dest=DEST[ev],cls=DCLS[ev];
-    if(d.status==='ja_lida'){flash(cls,dest,'Caixa '+cx+' · NF '+nf+' já foi lida','Destino: '+dest+'. Não registrei de novo. Se foi engano, reverta pelo histórico.');tone('ERR');return}
-    its.forEach(function(r){var pl=plan(r);BK.forEach(function(k){if(pl[k])addLid('caixa',cx,r[0],k,pl[k])})});
-    var comp=its.filter(function(r){return r[7]>0});
-    flash(cls,dest,'Caixa '+cx+' · NF '+nf+(ev==='D'?' · não abrir: volta para o estoque':' · enviar fechada'),fmt(d.qtd)+' un registradas em '+dest+'.',comp.length?'<div class="compnote"><strong>Contém complemento do CBP:</strong> '+comp.map(function(r){return esc(r[1])+' ('+r[7]+' un)'}).join('; ')+'</div>':'');
-    tone(ev);render();agendarRefresh();focusTit();
+    if(d.status==='ja_lida'){flash('err','CAIXA JÁ LIDA','Caixa '+cx+' · NF '+nf,'Esta caixa já foi registrada. Se foi engano, procure no histórico e reverta.');tone('ERR');return}
+    var t=d.total||{},ks=['C','E','U','D'].filter(function(k){return t[k]>0}),tot=ks.reduce(function(a,k){return a+t[k]},0);
+    (d.itens||[]).forEach(function(x){['C','E','U','D'].forEach(function(k){if(x[k])addLid('caixa',cx,x.isbn,k,x[k])})});
+    if(!tot){flash('dev','CAIXA SEM SALDO','Caixa '+cx+' · NF '+nf,'Todos os livros desta caixa já tinham sido bipados antes.');tone('ERR');render();return}
+    if(ks.length===1){var k=ks[0];
+      flash(DCLS[k],DEST[k]+' · '+tot+' UN','Caixa '+cx+' · NF '+nf+(k==='D'?' · não abrir: volta para o estoque':' · enviar a caixa fechada'),'Todos os livros desta caixa vão para '+DEST[k]+(k==='D'?' (nenhum pedido precisa deles agora).':', que ainda precisa deles.'));tone(k)}
+    else{
+      var lst=(d.itens||[]).map(function(x){var p=partesTxt({C:x.C,E:x.E,U:x.U,D:x.D});return '<li>'+esc(x.titulo)+': <strong>'+p.join(' · ')+'</strong></li>'}).join('');
+      flash('abrir','ABRIR E SEPARAR','Caixa '+cx+' · NF '+nf+' · '+tot+' un','Separe assim:','<div class="compnote" style="text-align:left"><ul style="margin-left:18px">'+lst+'</ul></div>');tone('BOX')}
+    render();agendarRefresh(150);focusTit();
   });
 }
 
@@ -210,19 +214,18 @@ function lerTitulo(raw,qtdForcada){
       if(d.faltam_titulo>0)c+=' Faltam '+d.faltam_titulo+' un deste título na caixa.';
       if(d.lido_caixa>=d.total_caixa){c+=' <strong>Caixa '+cx+' · NF '+cn+' concluída.</strong>';if(cur===cx&&curNota===cn){cur=null;curNota=null}}
       flash(DCLS[k],k==='K'?'CBP · COMPLEMENTO':DEST[k],d.descricao||tituloDe(i),c);tone(k);render();agendarRefresh();return}
-    var s=await rpc('sep_bipar_solto',{p_isbn:i,p_prioridade:$('prio').value,p_qtd:q});
-    var ps=s.partes||{};if(!s.partes)ps[s.destino]=1;['C','E','U','D'].forEach(function(z){if(ps[z])addLid('solto','',i,z,ps[z])});
+    var dd=$('daDev').checked;
+    var s=await rpc('sep_bipar_livre',{p_isbn:i,p_qtd:q,p_da_devolucao:dd});
     var nm=s.titulo||tituloDe(i);
-    if(q>1){var ls=partesTxt(ps),dv2=s.dev||{};
-      var cls2=ls.length>1?'abrir':ps.C?'cbp':ps.E?'cbtbe':ps.U?'urg':'dev',big=ls.length>1?'DIVIDIR '+q+' UN':(ps.C?'CBP':ps.E?'CBTBE':ps.U?'URGÊNCIA DEV':'DEVOLUÇÃO POA')+' · '+q+' UN';
-      var extra2=(ps.D&&dv2.soltos>dv2.precisa)?' Atenção: a devolução deste título passou do previsto ('+dv2.soltos+' de '+dv2.precisa+'). Confira a quantidade.':'';
-      flash(cls2,big,nm,'Livro solto: separe <strong>'+ls.join(' · ')+'</strong>.'+extra2);tone(ls.length>1?'BOX':ps.C?'C':ps.E?'E':ps.U?'U':'D');render();agendarRefresh();return}
-    if(s.destino==='U'){var ug=s.urg||{},fu=Math.max(0,(ug.precisa||0)-(ug.soltos||0));flash('urg','URGÊNCIA DEV',nm,'Urgência de devolução: unidade '+ug.soltos+' de '+ug.precisa+'.'+(fu?' Faltam '+fu+'.':' Urgência deste título completa.'));tone('U')}
-    else if(s.destino==='D'){var dv=s.dev||{},fd=Math.max(0,(dv.precisa||0)-(dv.soltos||0));flash('dev','DEVOLUÇÃO POA',nm,!s.no_pedido?'Este título não está no plano. Separe para devolução e avise o responsável.':(dv.soltos<=dv.precisa?'Livro solto: unidade '+dv.soltos+' de '+dv.precisa+' da devolução POA.'+(fd?' Faltam '+fd+'.':' Devolução deste título completa.'):'CBP, CBTBE e devolução previstos já completos: esta unidade passa do estoque previsto. Avise o responsável.'));tone('D')}
-    else{var ev=s.destino==='C'?'CBP':'CBTBE',me=s.destino==='C'?s.cbp:s.cbtbe,ot=s.destino==='C'?s.cbtbe:s.cbp,o=s.destino==='C'?'CBTBE':'CBP';
-      var fm=Math.max(0,me.precisa-me.soltos),fo=Math.max(0,ot.precisa-ot.soltos);
-      flash(s.destino==='C'?'cbp':'cbtbe',ev,nm,'Livro solto: unidade '+me.soltos+' de '+me.precisa+' que faltam no '+ev+'.'+(fm?' Faltam '+fm+'.':' '+ev+' completo neste título.')+(fo?' '+o+' ainda precisa de '+fo+'.':''));tone(s.destino)}
-    render();agendarRefresh();
+    if(s.status==='sem_falta'){flash('dev','NÃO FALTA','',esc(nm)+': CBP, CBTBE e urgência já estão completos. Devolva o livro à pilha de devolução.');tone('ERR');return}
+    if(s.status==='sem_devolucao'){flash('err','SEM DEVOLUÇÃO LIDA',nm,'Não há leitura de devolução deste título para mover. Desmarque "Tirado da devolução" e bipe de novo.');tone('ERR');return}
+    var ps=s.partes||{};['C','E','U','D'].forEach(function(z){if(ps[z])addLid('solto','',i,z,ps[z])});
+    var ls=partesTxt(ps),fd=s.falta_depois||{},resto=[];
+    if(fd.C)resto.push('CBP '+fd.C);if(fd.E)resto.push('CBTBE '+fd.E);if(fd.U)resto.push('URG '+fd.U);
+    var info=(dd?'Tirado da devolução. ':'')+(resto.length?'Ainda falta: '+resto.join(' · ')+'.':'Este título está completo nos pedidos.');
+    if(ls.length>1){flash('abrir','DIVIDIR '+s.qtd+' UN',nm,'Separe assim: <strong>'+ls.join(' · ')+'</strong>. '+info);tone('BOX')}
+    else{var k=ps.C?'C':ps.E?'E':ps.U?'U':'D';flash(DCLS[k],DEST[k]+(s.qtd>1?' · '+s.qtd+' UN':''),nm,(k==='D'?'Nenhum pedido precisa deste título agora. ':'')+info);tone(k)}
+    render();agendarRefresh(150);
   });
 }
 
@@ -232,7 +235,7 @@ var camPendente=null,camAberta=false,leitor=null,camPronto=true,camVisto=0,camLi
 var CAM_LIB='https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js';
 function carregarLib(){return new Promise(function(ok,erro){if(window.Html5Qrcode)return ok();var sc=document.createElement('script');sc.src=CAM_LIB;sc.onload=function(){ok()};sc.onerror=function(){erro(new Error('Não foi possível carregar o leitor da câmera.'))};document.head.appendChild(sc)})}
 function camEstado(txt,pronto){var e=$('camEstado');e.textContent=txt;e.className='cam-estado'+(pronto?' pronto':'')}
-function camCtx(){$('camCtx').textContent=cur?('Caixa ativa '+cur+' · NF '+curNota+' · '+(sitFis(cur,curNota)||'')):'Livros soltos (sem caixa ativa)'}
+function camCtx(){$('camCtx').textContent=($('daDev').checked?'TIRADO DA DEVOLUÇÃO · ':'')+(cur?('Caixa ativa '+cur+' · NF '+curNota+' · '+(sitFis(cur,curNota)||'')):'Livros: vão para o pedido que falta')}
 async function abrirCamera(){
   audioAtivar();
   if(camAberta)return;
@@ -308,6 +311,7 @@ $('fQtd').addEventListener('submit',function(e){e.preventDefault();var ev=new Ke
 var pendIsbn=null;
 function mostrarPend(){var el=$('pend1');if(!pendIsbn){el.innerHTML='';return}el.innerHTML='<div class="pendente">Lido <b>'+esc(tituloDe(pendIsbn))+'</b> ('+pendIsbn+'). Digite a quantidade e tecle Enter. <button class="btn sm" id="pendCancel">Cancelar</button></div>';$('pendCancel').onclick=function(){pendIsbn=null;mostrarPend();focusTit()}}
 $('modoQtd').checked=lsGet('modoQtd','0')==='1';
+$('daDev').addEventListener('change',function(){$('daDevAviso').classList.toggle('hidden',!this.checked);focusTit()});
 $('modoQtd').addEventListener('change',function(){lsSet('modoQtd',this.checked?'1':'0');pendIsbn=null;mostrarPend()});
 $('inQtd').addEventListener('keydown',function(e){if(e.key!=='Enter')return;e.preventDefault();
   if(pendIsbn){var p=pendIsbn;pendIsbn=null;mostrarPend();lerTitulo(p);$('inTit').focus()}else $('inTit').focus()});
