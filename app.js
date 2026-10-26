@@ -301,6 +301,10 @@ $('btnUndo').addEventListener('click',function(){var h=HIST.filter(function(x){r
 /* ---------- eventos de entrada ---------- */
 $('inNota').addEventListener('keydown',function(e){if(e.key!=='Enter')return;e.preventDefault();if($('inCaixa').value.trim())lerCaixa();else{var v=this.value.replace(/\D/g,'');if(v.length>=10){this.value='';lerTitulo(v)}else $('inCaixa').focus()}});
 $('inCaixa').addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();lerCaixa()}});
+$('fCaixa').addEventListener('submit',function(e){e.preventDefault();$('inCaixa').blur();lerCaixa()});
+$('fNota').addEventListener('submit',function(e){e.preventDefault();if($('inCaixa').value.trim())lerCaixa();else $('inCaixa').focus()});
+$('fTit').addEventListener('submit',function(e){e.preventDefault();var ev=new KeyboardEvent('keydown',{key:'Enter'});$('inTit').dispatchEvent(ev)});
+$('fQtd').addEventListener('submit',function(e){e.preventDefault();var ev=new KeyboardEvent('keydown',{key:'Enter'});$('inQtd').dispatchEvent(ev)});
 var pendIsbn=null;
 function mostrarPend(){var el=$('pend1');if(!pendIsbn){el.innerHTML='';return}el.innerHTML='<div class="pendente">Lido <b>'+esc(tituloDe(pendIsbn))+'</b> ('+pendIsbn+'). Digite a quantidade e tecle Enter. <button class="btn sm" id="pendCancel">Cancelar</button></div>';$('pendCancel').onclick=function(){pendIsbn=null;mostrarPend();focusTit()}}
 $('modoQtd').checked=lsGet('modoQtd','0')==='1';
